@@ -56,7 +56,7 @@ const he = {
   technicianCol: 'טכנאי',
   statusCol: 'סטטוס',
 
-  generateConfirm: 'יצירת תוכנית תדרוס את השיבוץ הקיים. להמשיך?',
+  generateConfirm: 'יצירת תוכנית תדרוס את השיבוץ הקיים, כולל הערות, נסיינים וצבעים. להמשיך?',
   absentPrefix: 'נעדר:',
   doubleBookedWarning: 'משובץ פעמיים באותו יום',
   constraintPrefix: 'אילוץ:',
@@ -219,7 +219,7 @@ const en: Record<keyof typeof he, string> = {
   technicianCol: 'Technician',
   statusCol: 'Status',
 
-  generateConfirm: 'Generating a schedule will overwrite the existing assignments. Continue?',
+  generateConfirm: 'Generating a schedule will overwrite the existing assignments, including notes, experimenters and colors. Continue?',
   absentPrefix: 'Absent:',
   doubleBookedWarning: 'Assigned twice on the same day',
   constraintPrefix: 'Constraint:',
