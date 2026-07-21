@@ -7,25 +7,35 @@ import { useT } from '@/lib/i18n';
 export interface AssignmentView {
   date: string;
   shift: string;
-  station: number;
-  technicianId: number;
+  stationId: number;
+  technicianId: number | null;
+  experimenter?: string | null;
+  note?: string | null;
+}
+
+export interface StationView {
+  id: number;
+  name: string;
+  position: number;
 }
 
 export default function ScheduleTable({
   dates,
   assignments,
   technicians,
+  stations,
   highlightTechId,
 }: {
   dates: string[];
   assignments: AssignmentView[];
   technicians: Array<{ id: number; name: string }>;
+  stations: StationView[];
   highlightTechId?: number;
 }) {
   const { t, lang } = useT();
   const nameOf = (id: number) => technicians.find(t => t.id === id)?.name ?? '?';
-  const cell = (date: string, shift: string, station: number) =>
-    assignments.find(a => a.date === date && a.shift === shift && a.station === station);
+  const cell = (date: string, shift: string, stationId: number) =>
+    assignments.find(a => a.date === date && a.shift === shift && a.stationId === stationId);
 
   return (
     <div className="overflow-x-auto">
@@ -43,22 +53,37 @@ export default function ScheduleTable({
         </thead>
         <tbody>
           {(['morning', 'evening'] as const).map(shift =>
-            [1, 2, 3, 4].map(station => (
-              <tr key={`${shift}-${station}`}>
+            stations.map(station => (
+              <tr key={`${shift}-${station.id}`}>
                 <td className="border p-2 bg-gray-50 whitespace-nowrap">
-                  {shiftLabel(lang, shift)} · {t('stationLabel')} {station}
+                  {shiftLabel(lang, shift)} · {station.name}
                 </td>
                 {dates.map(date => {
-                  const a = cell(date, shift, station);
-                  const mine = a && a.technicianId === highlightTechId;
+                  const a = cell(date, shift, station.id);
+                  const mine = a && a.technicianId !== null && a.technicianId === highlightTechId;
+                  const empty = !a || (a.technicianId === null && !a.experimenter);
                   return (
                     <td
                       key={date}
                       className={`border p-2 text-center ${
-                        !a ? 'bg-red-50 text-red-400' : mine ? 'bg-blue-100 font-bold' : ''
+                        empty ? 'bg-red-50' : mine ? 'bg-blue-100 font-bold' : ''
                       }`}
                     >
-                      {a ? nameOf(a.technicianId) : '—'}
+                      {!empty && a && (
+                        <>
+                          {a.technicianId !== null && <div>{nameOf(a.technicianId)}</div>}
+                          {a.experimenter && (
+                            <div className="text-xs text-gray-500 font-normal">
+                              {t('experimenterLabel')}: {a.experimenter}
+                            </div>
+                          )}
+                          {a.note && (
+                            <div className="text-xs text-gray-500 font-normal">
+                              {t('noteLabel')}: {a.note}
+                            </div>
+                          )}
+                        </>
+                      )}
                     </td>
                   );
                 })}

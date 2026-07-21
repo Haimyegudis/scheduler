@@ -45,13 +45,25 @@ CREATE TABLE "Schedule" (
 );
 
 -- CreateTable
+CREATE TABLE "Station" (
+    "id" SERIAL NOT NULL,
+    "name" TEXT NOT NULL,
+    "position" INTEGER NOT NULL,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+
+    CONSTRAINT "Station_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "Assignment" (
     "id" SERIAL NOT NULL,
     "scheduleId" INTEGER NOT NULL,
     "date" TEXT NOT NULL,
     "shift" TEXT NOT NULL,
-    "station" INTEGER NOT NULL,
-    "technicianId" INTEGER NOT NULL,
+    "stationId" INTEGER NOT NULL,
+    "technicianId" INTEGER,
+    "experimenter" TEXT,
+    "note" TEXT,
 
     CONSTRAINT "Assignment_pkey" PRIMARY KEY ("id")
 );
@@ -81,13 +93,16 @@ CREATE UNIQUE INDEX "Constraint_technicianId_date_key" ON "Constraint"("technici
 CREATE UNIQUE INDEX "Schedule_weekStart_key" ON "Schedule"("weekStart");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Assignment_scheduleId_date_shift_station_key" ON "Assignment"("scheduleId", "date", "shift", "station");
+CREATE UNIQUE INDEX "Assignment_scheduleId_date_shift_stationId_key" ON "Assignment"("scheduleId", "date", "shift", "stationId");
 
 -- AddForeignKey
 ALTER TABLE "Constraint" ADD CONSTRAINT "Constraint_technicianId_fkey" FOREIGN KEY ("technicianId") REFERENCES "Technician"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Assignment" ADD CONSTRAINT "Assignment_scheduleId_fkey" FOREIGN KEY ("scheduleId") REFERENCES "Schedule"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Assignment" ADD CONSTRAINT "Assignment_stationId_fkey" FOREIGN KEY ("stationId") REFERENCES "Station"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Assignment" ADD CONSTRAINT "Assignment_technicianId_fkey" FOREIGN KEY ("technicianId") REFERENCES "Technician"("id") ON DELETE CASCADE ON UPDATE CASCADE;

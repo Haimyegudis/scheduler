@@ -4,13 +4,14 @@ import { useCallback, useEffect, useState } from 'react';
 import NavBar from '@/components/NavBar';
 import WeekNav from '@/components/WeekNav';
 import Loading from '@/components/Loading';
-import ScheduleTable, { type AssignmentView } from '@/components/ScheduleTable';
+import ScheduleTable, { type AssignmentView, type StationView } from '@/components/ScheduleTable';
 import { getCurrentWeekStart, weekDates } from '@/lib/dates';
 import { useT } from '@/lib/i18n';
 
 interface ScheduleData {
   schedule: { status: string; includeFriday: boolean; assignments: AssignmentView[] } | null;
   technicians: Array<{ id: number; name: string }>;
+  stations: StationView[];
 }
 
 export default function ScheduleClient({ name, technicianId }: { name: string; technicianId: number }) {
@@ -59,6 +60,7 @@ export default function ScheduleClient({ name, technicianId }: { name: string; t
               dates={weekDates(weekStart, data.schedule.includeFriday)}
               assignments={data.schedule.assignments}
               technicians={data.technicians}
+              stations={data.stations}
               highlightTechId={technicianId}
             />
           </>

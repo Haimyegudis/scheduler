@@ -9,15 +9,14 @@ export interface TechAvailability {
 export interface GeneratedAssignment {
   date: string;
   shift: Shift;
-  station: number;
+  stationId: number;
   technicianId: number;
 }
 
-const STATIONS = 4;
-
 export function generateAssignments(
   dates: string[],
-  techs: TechAvailability[]
+  techs: TechAvailability[],
+  stationIds: number[]
 ): GeneratedAssignment[] {
   const totalShifts = new Map<number, number>();
   const shiftTypeCounts: Record<Shift, Map<number, number>> = {
@@ -56,9 +55,10 @@ export function generateAssignments(
         return a.technicianId - b.technicianId;
       });
 
-      for (let station = 1; station <= Math.min(STATIONS, available.length); station++) {
-        const t = available[station - 1];
-        result.push({ date, shift, station, technicianId: t.technicianId });
+      const slots = Math.min(stationIds.length, available.length);
+      for (let i = 0; i < slots; i++) {
+        const t = available[i];
+        result.push({ date, shift, stationId: stationIds[i], technicianId: t.technicianId });
         usedToday.add(t.technicianId);
         totalShifts.set(t.technicianId, totalShifts.get(t.technicianId)! + 1);
         shiftTypeCounts[shift].set(t.technicianId, shiftTypeCounts[shift].get(t.technicianId)! + 1);

@@ -122,6 +122,22 @@ const he = {
   dateCol: 'תאריך',
   dayCol: 'יום',
   shiftCol: 'משמרת',
+
+  experimenterLabel: 'ניסוי',
+  noteLabel: 'הערה',
+  experimenterInputPlaceholder: 'שם המנוסה',
+  noteInputPlaceholder: 'הערה',
+  stationsHeading: 'עמדות',
+  stationNamePlaceholder: 'שם עמדה חדשה',
+  activeCol: 'פעיל',
+  activateBtn: 'הפעל',
+  deactivateBtn: 'השבת',
+  saveBtn: 'שמור',
+  noStationsHint: 'לא הוגדרו עמדות עדיין. הוסף עמדה כדי להתחיל לבנות תוכנית.',
+  noActiveStationsBoardHint: 'אין עמדות פעילות. הוסף עמדה בפאנל הניהול כדי לבנות תוכנית.',
+  stationNameRequired: 'נא להזין שם עמדה',
+  stationDeleteBlocked: 'לא ניתן למחוק עמדה שמשובצת בתוכנית — ניתן להשבית אותה',
+  stationNotFound: 'עמדה לא נמצאה',
 } as const;
 
 const en: Record<keyof typeof he, string> = {
@@ -245,6 +261,22 @@ const en: Record<keyof typeof he, string> = {
   dateCol: 'Date',
   dayCol: 'Day',
   shiftCol: 'Shift',
+
+  experimenterLabel: 'Experimenter',
+  noteLabel: 'Note',
+  experimenterInputPlaceholder: 'Experimenter name',
+  noteInputPlaceholder: 'Note',
+  stationsHeading: 'Stations',
+  stationNamePlaceholder: 'New station name',
+  activeCol: 'Active',
+  activateBtn: 'Activate',
+  deactivateBtn: 'Deactivate',
+  saveBtn: 'Save',
+  noStationsHint: 'No stations defined yet. Add a station to start building a schedule.',
+  noActiveStationsBoardHint: 'No active stations. Add one in the management panel to build a schedule.',
+  stationNameRequired: 'Please enter a station name',
+  stationDeleteBlocked: 'Cannot delete a station that is used in a schedule — deactivate it instead',
+  stationNotFound: 'Station not found',
 };
 
 export const dict = { he, en };
@@ -274,6 +306,9 @@ const apiErrorMap: Record<string, string> = {
   'כתובת מייל לא תקינה': 'Invalid email address',
   'המייל כבר ברשימה': 'Email is already on the list',
   'אין תוכנית לשבוע זה': 'No schedule for this week',
+  'נא להזין שם עמדה': 'Please enter a station name',
+  'עמדה לא נמצאה': 'Station not found',
+  'לא ניתן למחוק עמדה שמשובצת בתוכנית — ניתן להשבית אותה': 'Cannot delete a station that is used in a schedule — deactivate it instead',
 };
 
 // Non-hook translator for use in server components (e.g. generateMetadata).

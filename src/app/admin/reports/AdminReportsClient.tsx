@@ -18,11 +18,13 @@ const ADMIN_LINKS_KEYS = [
 interface ReportRow {
   date: string;
   shift: string;
-  station: number;
-  technicianId: number;
-  technicianName: string;
+  stationId: number;
+  stationName: string;
+  technicianId: number | null;
+  technicianName: string | null;
 }
 interface Tech { id: number; name: string }
+interface StationOpt { id: number; name: string }
 interface SummaryRow {
   technicianId: number;
   name: string;
@@ -59,9 +61,10 @@ export default function AdminReportsClient() {
   const [month, setMonth] = useState(currentMonth());
   const [mode, setMode] = useState<'worker' | 'machine' | 'vacations'>('worker');
   const [workerId, setWorkerId] = useState('');
-  const [station, setStation] = useState('1');
+  const [station, setStation] = useState('');
   const [rows, setRows] = useState<ReportRow[]>([]);
   const [techs, setTechs] = useState<Tech[]>([]);
+  const [stations, setStations] = useState<StationOpt[]>([]);
   const [loading, setLoading] = useState(true);
   const [year, setYear] = useState(String(new Date().getFullYear()));
   const [summary, setSummary] = useState<SummaryRow[]>([]);
@@ -72,6 +75,16 @@ export default function AdminReportsClient() {
       .then(r => (r.ok ? r.json() : { users: [] }))
       .then(d => setTechs((d.users as Array<Tech & { isAdmin: boolean }>).filter(u => !u.isAdmin)))
       .catch(() => setTechs([]));
+    fetch('/api/admin/stations')
+      .then(r => (r.ok ? r.json() : { stations: [] }))
+      .then(d => {
+        const opts = (d.stations as Array<StationOpt & { position: number }>)
+          .slice()
+          .sort((a, b) => a.position - b.position);
+        setStations(opts);
+        setStation(prev => prev || (opts[0] ? String(opts[0].id) : ''));
+      })
+      .catch(() => setStations([]));
   }, []);
 
   const load = useCallback(async (m: string) => {
@@ -112,7 +125,7 @@ export default function AdminReportsClient() {
   const filtered =
     mode === 'worker'
       ? rows.filter(r => String(r.technicianId) === workerId)
-      : rows.filter(r => String(r.station) === station);
+      : rows.filter(r => String(r.stationId) === station);
 
   const morningCount = filtered.filter(r => r.shift === 'morning').length;
   const eveningCount = filtered.filter(r => r.shift === 'evening').length;
@@ -180,8 +193,8 @@ export default function AdminReportsClient() {
                 onChange={e => setStation(e.target.value)}
                 className="block mt-1 border rounded px-2 py-1.5"
               >
-                {[1, 2, 3, 4].map(s => (
-                  <option key={s} value={s}>{t('stationLabel')} {s}</option>
+                {stations.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
               </select>
             </label>
@@ -269,7 +282,7 @@ export default function AdminReportsClient() {
                         <td className="border p-2 text-center">{dayName(r.date, lang)}</td>
                         <td className="border p-2 text-center">{shiftLabel(lang, r.shift)}</td>
                         <td className="border p-2 text-center">
-                          {mode === 'worker' ? `${t('stationLabel')} ${r.station}` : r.technicianName}
+                          {mode === 'worker' ? r.stationName : (r.technicianName ?? '—')}
                         </td>
                       </tr>
                     ))}

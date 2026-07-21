@@ -29,10 +29,12 @@ async function techReq(method: string, url: string, techId: number, body?: unkno
 }
 
 let techIds: number[];
+let stationIds: number[];
 
 beforeEach(async () => {
   await prisma.technician.deleteMany();
   await prisma.schedule.deleteMany();
+  await prisma.station.deleteMany();
   techIds = [];
   for (let i = 1; i <= 9; i++) {
     const t = await prisma.technician.create({
@@ -42,6 +44,11 @@ beforeEach(async () => {
     for (const date of DATES) {
       await prisma.constraint.create({ data: { technicianId: t.id, date, value: 'flex' } });
     }
+  }
+  stationIds = [];
+  for (let i = 1; i <= 9; i++) {
+    const s = await prisma.station.create({ data: { name: `עמדה ${i}`, position: i } });
+    stationIds.push(s.id);
   }
 });
 
@@ -100,7 +107,7 @@ test('manual save rejects assignment on an off or absent day with 400', async ()
   const offRes = await saveSchedule(await adminReq('PUT', '/x', {
     weekStart: WEEK,
     includeFriday: false,
-    assignments: [{ date: DATES[0], shift: 'morning', station: 1, technicianId: techIds[1] }],
+    assignments: [{ date: DATES[0], shift: 'morning', stationId: stationIds[0], technicianId: techIds[1] }],
   }));
   expect(offRes.status).toBe(400);
 
@@ -110,7 +117,7 @@ test('manual save rejects assignment on an off or absent day with 400', async ()
   const absRes = await saveSchedule(await adminReq('PUT', '/x', {
     weekStart: WEEK,
     includeFriday: false,
-    assignments: [{ date: DATES[0], shift: 'morning', station: 1, technicianId: techIds[2] }],
+    assignments: [{ date: DATES[0], shift: 'morning', stationId: stationIds[0], technicianId: techIds[2] }],
   }));
   expect(absRes.status).toBe(400);
 
@@ -118,7 +125,7 @@ test('manual save rejects assignment on an off or absent day with 400', async ()
   const mismatch = await saveSchedule(await adminReq('PUT', '/x', {
     weekStart: WEEK,
     includeFriday: false,
-    assignments: [{ date: DATES[0], shift: 'morning', station: 1, technicianId: techIds[3] }],
+    assignments: [{ date: DATES[0], shift: 'morning', stationId: stationIds[0], technicianId: techIds[3] }],
   }));
   expect(mismatch.status).toBe(200);
 });

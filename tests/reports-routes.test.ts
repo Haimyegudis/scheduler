@@ -10,33 +10,55 @@ async function adminReq(url: string): Promise<Request> {
 }
 
 let techId: number;
+let stationIds: number[];
 
 beforeEach(async () => {
   await prisma.technician.deleteMany();
   await prisma.schedule.deleteMany();
+  await prisma.station.deleteMany();
   const t = await prisma.technician.create({
     data: { name: 'רון', email: 'rep@x.com', passwordHash: 'x' },
   });
   techId = t.id;
+  stationIds = [];
+  for (let i = 1; i <= 3; i++) {
+    const s = await prisma.station.create({ data: { name: `עמדה ${i}`, position: i } });
+    stationIds.push(s.id);
+  }
   const pub = await prisma.schedule.create({ data: { weekStart: '2026-07-05', status: 'published' } });
   const draft = await prisma.schedule.create({ data: { weekStart: '2026-07-12', status: 'draft' } });
   await prisma.assignment.createMany({
     data: [
-      { scheduleId: pub.id, date: '2026-07-05', shift: 'morning', station: 2, technicianId: techId },
-      { scheduleId: pub.id, date: '2026-07-06', shift: 'evening', station: 3, technicianId: techId },
-      { scheduleId: draft.id, date: '2026-07-13', shift: 'morning', station: 1, technicianId: techId },
+      { scheduleId: pub.id, date: '2026-07-05', shift: 'morning', stationId: stationIds[1], technicianId: techId },
+      { scheduleId: pub.id, date: '2026-07-06', shift: 'evening', stationId: stationIds[2], technicianId: techId },
+      { scheduleId: draft.id, date: '2026-07-13', shift: 'morning', stationId: stationIds[0], technicianId: techId },
     ],
   });
 });
 
-test('returns published assignments in range with technician name, ordered', async () => {
+test('returns published assignments in range with technician name and station name, ordered', async () => {
   const res = await getReports(await adminReq('/x?from=2026-07-01&to=2026-07-31'));
   expect(res.status).toBe(200);
   const data = await res.json();
   expect(data.assignments).toHaveLength(2); // draft excluded
   expect(data.assignments[0]).toMatchObject({
-    date: '2026-07-05', shift: 'morning', station: 2, technicianId: techId, technicianName: 'רון',
+    date: '2026-07-05', shift: 'morning', stationId: stationIds[1], stationName: 'עמדה 2',
+    technicianId: techId, technicianName: 'רון',
   });
+});
+
+test('includes rows without a technician (experimenter/note only) with null technician fields', async () => {
+  const pub = (await prisma.schedule.findUnique({ where: { weekStart: '2026-07-05' } }))!;
+  await prisma.assignment.create({
+    data: {
+      scheduleId: pub.id, date: '2026-07-05', shift: 'evening', stationId: stationIds[0],
+      technicianId: null, experimenter: 'ד"ר לוי',
+    },
+  });
+  const res = await getReports(await adminReq('/x?from=2026-07-01&to=2026-07-31'));
+  const data = await res.json();
+  const row = data.assignments.find((a: { technicianId: number | null }) => a.technicianId === null);
+  expect(row).toMatchObject({ stationId: stationIds[0], technicianName: null, experimenter: 'ד"ר לוי' });
 });
 
 test('range filter excludes out-of-range dates', async () => {

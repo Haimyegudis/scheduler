@@ -17,12 +17,15 @@ const ADMIN_LINKS_KEYS = [
 ] as const;
 
 const SHIFTS = ['morning', 'evening'] as const;
-const STATIONS = [1, 2, 3, 4];
 
-type CellKey = string; // `${date}|${shift}|${station}`
-const key = (date: string, shift: string, station: number): CellKey => `${date}|${shift}|${station}`;
+type CellKey = string; // `${date}|${shift}|${stationId}`
+const key = (date: string, shift: string, stationId: number): CellKey => `${date}|${shift}|${stationId}`;
 
 interface Tech { id: number; name: string }
+interface Station { id: number; name: string; position: number; active: boolean }
+interface CellValue { technicianId: number | ''; experimenter: string; note: string }
+
+const emptyCell: CellValue = { technicianId: '', experimenter: '', note: '' };
 
 export default function AdminScheduleClient() {
   const { t, lang } = useT();
@@ -30,12 +33,30 @@ export default function AdminScheduleClient() {
   const [weekStart, setWeekStart] = useState(getCurrentWeekStart());
   const [includeFriday, setIncludeFriday] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
-  const [cells, setCells] = useState<Record<CellKey, number | ''>>({});
+  const [cells, setCells] = useState<Record<CellKey, CellValue>>({});
   const [technicians, setTechnicians] = useState<Tech[]>([]);
+  const [stations, setStations] = useState<Station[]>([]);
   const [constraints, setConstraints] = useState<Record<string, Record<string, string>>>({});
   const [absences, setAbsences] = useState<Record<string, Record<string, string>>>({});
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [stationsOpen, setStationsOpen] = useState(false);
+  const [newStationName, setNewStationName] = useState('');
+  const [stationDrafts, setStationDrafts] = useState<Record<number, string>>({});
+  const [stationsMessage, setStationsMessage] = useState('');
+
+  const loadStations = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/stations');
+      if (res.ok) {
+        const data = await res.json();
+        setStations(data.stations);
+        setStationDrafts(Object.fromEntries(data.stations.map((s: Station) => [s.id, s.name])));
+      }
+    } catch {
+      // ignore; board still renders with whatever we last had
+    }
+  }, []);
 
   const load = useCallback(async (ws: string) => {
     setLoading(true);
@@ -45,6 +66,7 @@ export default function AdminScheduleClient() {
         fetch(`/api/schedule?weekStart=${ws}`),
         fetch(`/api/admin/overview?weekStart=${ws}`),
       ]);
+      await loadStations();
       if (schedRes.ok && overviewRes.ok) {
         const sched = await schedRes.json();
         const overview = await overviewRes.json();
@@ -53,9 +75,13 @@ export default function AdminScheduleClient() {
         setAbsences(overview.absences ?? {});
         setIncludeFriday(sched.schedule?.includeFriday ?? overview.includeFriday ?? false);
         setStatus(sched.schedule?.status ?? null);
-        const next: Record<CellKey, number | ''> = {};
+        const next: Record<CellKey, CellValue> = {};
         for (const a of sched.schedule?.assignments ?? []) {
-          next[key(a.date, a.shift, a.station)] = a.technicianId;
+          next[key(a.date, a.shift, a.stationId)] = {
+            technicianId: a.technicianId ?? '',
+            experimenter: a.experimenter ?? '',
+            note: a.note ?? '',
+          };
         }
         setCells(next);
       } else {
@@ -66,28 +92,41 @@ export default function AdminScheduleClient() {
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, [t, loadStations]);
 
   useEffect(() => {
     load(weekStart);
   }, [weekStart, load]);
 
   const dates = weekDates(weekStart, includeFriday);
+  const activeStations = useMemo(
+    () => stations.filter(s => s.active).sort((a, b) => a.position - b.position),
+    [stations]
+  );
 
   const assignmentsPayload = useMemo(() => {
     const validDates = new Set(weekDates(weekStart, includeFriday));
     return Object.entries(cells)
-      .filter(([, techId]) => techId !== '')
-      .map(([k, technicianId]) => {
-        const [date, shift, station] = k.split('|');
-        return { date, shift, station: Number(station), technicianId: technicianId as number };
+      .filter(([, v]) => v.technicianId !== '' || v.experimenter.trim() !== '' || v.note.trim() !== '')
+      .map(([k, v]) => {
+        const [date, shift, stationId] = k.split('|');
+        return {
+          date,
+          shift,
+          stationId: Number(stationId),
+          technicianId: v.technicianId === '' ? null : v.technicianId,
+          experimenter: v.experimenter.trim() || undefined,
+          note: v.note.trim() || undefined,
+        };
       })
       .filter(a => validDates.has(a.date));
   }, [cells, weekStart, includeFriday]);
 
   const shiftCounts = useMemo(() => {
     const counts = new Map<number, number>();
-    for (const a of assignmentsPayload) counts.set(a.technicianId, (counts.get(a.technicianId) ?? 0) + 1);
+    for (const a of assignmentsPayload) {
+      if (a.technicianId !== null) counts.set(a.technicianId, (counts.get(a.technicianId) ?? 0) + 1);
+    }
     return counts;
   }, [assignmentsPayload]);
 
@@ -101,6 +140,10 @@ export default function AdminScheduleClient() {
     if (timesToday > 1) return t('doubleBookedWarning');
     if (!okByConstraint) return c ? `${t('constraintPrefix')} ${constraintLabel(lang, c)}` : t('noConstraintFilled');
     return null;
+  }
+
+  function updateCell(k: CellKey, patch: Partial<CellValue>) {
+    setCells(c => ({ ...c, [k]: { ...(c[k] ?? emptyCell), ...patch } }));
   }
 
   async function saveDraft(overrideFriday?: boolean): Promise<boolean> {
@@ -176,11 +219,127 @@ export default function AdminScheduleClient() {
     }
   }
 
+  async function addStation() {
+    const name = newStationName.trim();
+    if (!name) return;
+    setStationsMessage('');
+    try {
+      const res = await fetch('/api/admin/stations', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      if (res.ok) {
+        setNewStationName('');
+        await loadStations();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setStationsMessage(data.error ? translateApiError(lang, data.error) : t('genericError'));
+      }
+    } catch {
+      setStationsMessage(t('networkError'));
+    }
+  }
+
+  async function renameStation(id: number) {
+    const name = (stationDrafts[id] ?? '').trim();
+    const current = stations.find(s => s.id === id);
+    if (!name || !current || name === current.name) return;
+    setStationsMessage('');
+    try {
+      const res = await fetch('/api/admin/stations', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id, name }),
+      });
+      if (res.ok) {
+        await loadStations();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setStationsMessage(data.error ? translateApiError(lang, data.error) : t('genericError'));
+      }
+    } catch {
+      setStationsMessage(t('networkError'));
+    }
+  }
+
+  async function toggleStationActive(id: number, active: boolean) {
+    setStationsMessage('');
+    try {
+      const res = await fetch('/api/admin/stations', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id, active }),
+      });
+      if (res.ok) {
+        await loadStations();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setStationsMessage(data.error ? translateApiError(lang, data.error) : t('genericError'));
+      }
+    } catch {
+      setStationsMessage(t('networkError'));
+    }
+  }
+
   return (
     <div>
       <NavBar name={t('adminName')} links={ADMIN_LINKS} />
       <main className="max-w-6xl mx-auto p-4">
         <WeekNav weekStart={weekStart} onChange={setWeekStart} />
+
+        <div className="bg-white rounded-lg shadow-sm mb-4">
+          <button
+            onClick={() => setStationsOpen(o => !o)}
+            className="w-full text-start px-4 py-2 font-bold flex items-center justify-between"
+          >
+            <span>{t('stationsHeading')}</span>
+            <span>{stationsOpen ? '▲' : '▼'}</span>
+          </button>
+          {stationsOpen && (
+            <div className="px-4 pb-4">
+              {stationsMessage && <p className="text-sm text-red-600 mb-2">{stationsMessage}</p>}
+              {stations.length === 0 && <p className="text-sm text-gray-500 mb-2">{t('noStationsHint')}</p>}
+              <ul className="divide-y mb-3">
+                {stations
+                  .slice()
+                  .sort((a, b) => a.position - b.position)
+                  .map(s => (
+                    <li key={s.id} className="flex items-center gap-2 py-2">
+                      <input
+                        value={stationDrafts[s.id] ?? s.name}
+                        onChange={e => setStationDrafts(d => ({ ...d, [s.id]: e.target.value }))}
+                        onBlur={() => renameStation(s.id)}
+                        className={`border rounded px-2 py-1 text-sm flex-1 ${s.active ? '' : 'text-gray-400'}`}
+                      />
+                      <button
+                        onClick={() => toggleStationActive(s.id, !s.active)}
+                        className="text-sm border rounded px-3 py-1 hover:bg-gray-100 whitespace-nowrap"
+                      >
+                        {s.active ? t('deactivateBtn') : t('activateBtn')}
+                      </button>
+                    </li>
+                  ))}
+              </ul>
+              <div className="flex gap-2">
+                <input
+                  value={newStationName}
+                  onChange={e => setNewStationName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && addStation()}
+                  placeholder={t('stationNamePlaceholder')}
+                  className="border rounded px-2 py-1 text-sm flex-1"
+                />
+                <button
+                  onClick={addStation}
+                  className="bg-blue-600 text-white rounded px-3 py-1 text-sm hover:bg-blue-700"
+                >
+                  {t('addBtn')}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
         {loading ? (
           <Loading />
         ) : (
@@ -204,61 +363,77 @@ export default function AdminScheduleClient() {
               </span>
             </div>
             {message && <p className="text-sm text-blue-700 mb-3">{message}</p>}
-            <div className="overflow-x-auto">
-              <table className="w-full bg-white rounded-lg shadow-sm text-sm border-collapse">
-                <thead>
-                  <tr>
-                    <th className="border p-2 bg-gray-100">{t('shiftStationHeader')}</th>
-                    {dates.map(d => (
-                      <th key={d} className="border p-2 bg-gray-100">
-                        {dayName(d, lang)}
-                        <div className="text-xs text-gray-400 font-normal">{formatDate(d)}</div>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {SHIFTS.map(shift =>
-                    STATIONS.map(station => (
-                      <tr key={`${shift}-${station}`}>
-                        <td className="border p-2 bg-gray-50 whitespace-nowrap">
-                          {shiftLabel(lang, shift)} · {t('stationLabel')} {station}
-                        </td>
-                        {dates.map(date => {
-                          const k = key(date, shift, station);
-                          const techId = cells[k] ?? '';
-                          const warning = warningsFor(date, shift, techId);
-                          return (
-                            <td key={date} className={`border p-1 ${techId === '' ? 'bg-red-50' : ''}`}>
-                              <select
-                                value={techId}
-                                onChange={e =>
-                                  setCells(c => ({ ...c, [k]: e.target.value === '' ? '' : Number(e.target.value) }))
-                                }
-                                className="w-full border-0 bg-transparent text-center"
-                              >
-                                <option value="">{t('emptySelectOption')}</option>
-                                {technicians
-                                  .filter(
-                                    tc =>
-                                      (constraints[String(tc.id)]?.[date] !== 'off' &&
-                                        !absences[String(tc.id)]?.[date]) ||
-                                      tc.id === techId
-                                  )
-                                  .map(tc => (
-                                    <option key={tc.id} value={tc.id}>{tc.name}</option>
-                                  ))}
-                              </select>
-                              {warning && <div className="text-xs text-orange-600 text-center">⚠ {warning}</div>}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+            {activeStations.length === 0 ? (
+              <p className="text-center text-gray-500 py-8">{t('noActiveStationsBoardHint')}</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full bg-white rounded-lg shadow-sm text-sm border-collapse">
+                  <thead>
+                    <tr>
+                      <th className="border p-2 bg-gray-100">{t('shiftStationHeader')}</th>
+                      {dates.map(d => (
+                        <th key={d} className="border p-2 bg-gray-100">
+                          {dayName(d, lang)}
+                          <div className="text-xs text-gray-400 font-normal">{formatDate(d)}</div>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {SHIFTS.map(shift =>
+                      activeStations.map(station => (
+                        <tr key={`${shift}-${station.id}`}>
+                          <td className="border p-2 bg-gray-50 whitespace-nowrap">
+                            {shiftLabel(lang, shift)} · {station.name}
+                          </td>
+                          {dates.map(date => {
+                            const k = key(date, shift, station.id);
+                            const v = cells[k] ?? emptyCell;
+                            const warning = warningsFor(date, shift, v.technicianId);
+                            return (
+                              <td key={date} className={`border p-1 align-top ${v.technicianId === '' ? 'bg-red-50' : ''}`}>
+                                <select
+                                  value={v.technicianId}
+                                  onChange={e =>
+                                    updateCell(k, { technicianId: e.target.value === '' ? '' : Number(e.target.value) })
+                                  }
+                                  className="w-full border-0 bg-transparent text-center text-xs"
+                                >
+                                  <option value="">{t('emptySelectOption')}</option>
+                                  {technicians
+                                    .filter(
+                                      tc =>
+                                        (constraints[String(tc.id)]?.[date] !== 'off' &&
+                                          !absences[String(tc.id)]?.[date]) ||
+                                        tc.id === v.technicianId
+                                    )
+                                    .map(tc => (
+                                      <option key={tc.id} value={tc.id}>{tc.name}</option>
+                                    ))}
+                                </select>
+                                <input
+                                  value={v.experimenter}
+                                  onChange={e => updateCell(k, { experimenter: e.target.value })}
+                                  placeholder={t('experimenterInputPlaceholder')}
+                                  className="w-full border rounded px-1 text-xs mt-1"
+                                />
+                                <input
+                                  value={v.note}
+                                  onChange={e => updateCell(k, { note: e.target.value })}
+                                  placeholder={t('noteInputPlaceholder')}
+                                  className="w-full border rounded px-1 text-xs mt-1"
+                                />
+                                {warning && <div className="text-xs text-orange-600 text-center">⚠ {warning}</div>}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
             <h3 className="font-bold mt-6 mb-2">{t('shiftsPerTechnicianHeading')}</h3>
             <div className="flex flex-wrap gap-2 text-sm">
               {technicians.map(tc => (
