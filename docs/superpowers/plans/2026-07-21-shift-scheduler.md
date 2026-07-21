@@ -4105,6 +4105,15 @@ Steps: TDD where logic changes (scheduler, routes); full suite + build green; co
 
 ---
 
+### Task 21: Technician "My Vacations" page (current year)
+
+- `GET /api/my-vacations` (technician role only, 401 otherwise): server computes the CURRENT year (UTC) and returns `{ year, summary: {vacation, sick, miluim, other, offMarked, total}, absences: [{id, startDate, endDate, type}] }` for the logged-in technician only — same day-counting/clipping logic as vacation-summary (extract a shared helper in `src/lib` rather than duplicating). Strictly current year: no year parameter accepted.
+- New page `/vacations` (technician guard like /constraints): summary chips + detail list of absence ranges with type labels + off-marked count; empty state text. All strings via i18n dictionaries (he+en).
+- TECH_LINKS in technician clients gains a third link `/vacations` ("החופשים שלי" / "My Vacations").
+- TDD for the API; suite + build green; commit.
+
+---
+
 ### Task 20: Modern UI redesign (frontend-design)
 
 - Invoke the frontend-design skill FIRST and follow it.
