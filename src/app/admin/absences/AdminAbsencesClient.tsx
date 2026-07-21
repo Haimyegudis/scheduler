@@ -2,16 +2,17 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import NavBar from '@/components/NavBar';
-import { ABSENCE_LABELS, ABSENCE_COLORS } from '@/lib/labels';
+import { absenceLabel, absenceEntries, ABSENCE_COLORS } from '@/lib/labels';
 import { formatDate } from '@/lib/dates';
+import { useT, translateApiError } from '@/lib/i18n';
 
-const ADMIN_LINKS = [
-  { href: '/admin', label: 'לוח בקרה' },
-  { href: '/admin/schedule', label: 'תוכנית משמרות' },
-  { href: '/admin/users', label: 'ניהול משתמשים' },
-  { href: '/admin/absences', label: 'היעדרויות' },
-  { href: '/admin/reports', label: 'דוחות' },
-];
+const ADMIN_LINKS_KEYS = [
+  { href: '/admin', key: 'dashboardNav' },
+  { href: '/admin/schedule', key: 'scheduleNav' },
+  { href: '/admin/users', key: 'usersNav' },
+  { href: '/admin/absences', key: 'absencesNav' },
+  { href: '/admin/reports', key: 'reportsNav' },
+] as const;
 
 interface Absence {
   id: number;
@@ -24,6 +25,8 @@ interface Absence {
 interface Tech { id: number; name: string }
 
 export default function AdminAbsencesClient() {
+  const { t, lang } = useT();
+  const ADMIN_LINKS = ADMIN_LINKS_KEYS.map(l => ({ href: l.href, label: t(l.key) }));
   const [absences, setAbsences] = useState<Absence[]>([]);
   const [techs, setTechs] = useState<Tech[]>([]);
   const [form, setForm] = useState({ technicianId: '', type: 'vacation', startDate: '', endDate: '' });
@@ -64,7 +67,8 @@ export default function AdminAbsencesClient() {
       setForm({ technicianId: '', type: 'vacation', startDate: '', endDate: '' });
       await load();
     } else {
-      setError((await res.json().catch(() => ({}))).error ?? 'שגיאה');
+      const data = await res.json().catch(() => ({}));
+      setError(data.error ? translateApiError(lang, data.error) : t('genericError'));
     }
   }
 
@@ -79,39 +83,39 @@ export default function AdminAbsencesClient() {
 
   return (
     <div>
-      <NavBar name="מנהל" links={ADMIN_LINKS} />
+      <NavBar name={t('adminName')} links={ADMIN_LINKS} />
       <main className="max-w-3xl mx-auto p-4 space-y-6">
         <section>
-          <h2 className="font-bold mb-2">הוספת היעדרות</h2>
+          <h2 className="font-bold mb-2">{t('addAbsenceHeading')}</h2>
           <form onSubmit={add} className="bg-white rounded-lg shadow-sm p-4 flex flex-wrap items-end gap-3">
             <label className="block text-sm">
-              עובד
+              {t('employeeLabel')}
               <select
                 required
                 value={form.technicianId}
                 onChange={e => setForm(f => ({ ...f, technicianId: e.target.value }))}
                 className="block mt-1 border rounded px-2 py-1.5 min-w-36"
               >
-                <option value="">בחר עובד</option>
-                {techs.map(t => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
+                <option value="">{t('selectEmployeeOption')}</option>
+                {techs.map(tc => (
+                  <option key={tc.id} value={tc.id}>{tc.name}</option>
                 ))}
               </select>
             </label>
             <label className="block text-sm">
-              סוג
+              {t('typeLabel')}
               <select
                 value={form.type}
                 onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
                 className="block mt-1 border rounded px-2 py-1.5"
               >
-                {Object.entries(ABSENCE_LABELS).map(([value, label]) => (
+                {absenceEntries(lang).map(([value, label]) => (
                   <option key={value} value={value}>{label}</option>
                 ))}
               </select>
             </label>
             <label className="block text-sm">
-              מתאריך
+              {t('fromDateLabel')}
               <input
                 type="date"
                 required
@@ -121,7 +125,7 @@ export default function AdminAbsencesClient() {
               />
             </label>
             <label className="block text-sm">
-              עד תאריך (כולל)
+              {t('toDateInclusiveLabel')}
               <input
                 type="date"
                 required
@@ -131,25 +135,25 @@ export default function AdminAbsencesClient() {
               />
             </label>
             <button type="submit" className="bg-blue-600 text-white rounded px-4 py-2 hover:bg-blue-700">
-              הוסף
+              {t('addBtn')}
             </button>
           </form>
           {error && <p className="text-red-600 text-sm mt-2">{error}</p>}
         </section>
         <section>
-          <h2 className="font-bold mb-2">היעדרויות</h2>
+          <h2 className="font-bold mb-2">{t('absencesHeading')}</h2>
           {loading ? (
-            <p className="text-center text-gray-500 py-8">טוען...</p>
+            <p className="text-center text-gray-500 py-8">{t('loading')}</p>
           ) : absences.length === 0 ? (
-            <p className="text-gray-500 text-sm">אין היעדרויות.</p>
+            <p className="text-gray-500 text-sm">{t('noAbsencesNote')}</p>
           ) : (
             <table className="w-full bg-white rounded-lg shadow-sm text-sm border-collapse">
               <thead>
                 <tr>
-                  <th className="border p-2 bg-gray-100 text-start">עובד</th>
-                  <th className="border p-2 bg-gray-100">סוג</th>
-                  <th className="border p-2 bg-gray-100">מתאריך</th>
-                  <th className="border p-2 bg-gray-100">עד תאריך</th>
+                  <th className="border p-2 bg-gray-100 text-start">{t('employeeLabel')}</th>
+                  <th className="border p-2 bg-gray-100">{t('typeLabel')}</th>
+                  <th className="border p-2 bg-gray-100">{t('fromDateLabel')}</th>
+                  <th className="border p-2 bg-gray-100">{t('toDateCol')}</th>
                   <th className="border p-2 bg-gray-100"></th>
                 </tr>
               </thead>
@@ -159,14 +163,14 @@ export default function AdminAbsencesClient() {
                     <td className="border p-2">{a.technicianName}</td>
                     <td className="border p-2 text-center">
                       <span className={`px-2 py-0.5 rounded-full text-xs ${ABSENCE_COLORS[a.type]}`}>
-                        {ABSENCE_LABELS[a.type]}
+                        {absenceLabel(lang, a.type)}
                       </span>
                     </td>
                     <td className="border p-2 text-center">{formatDate(a.startDate)}</td>
                     <td className="border p-2 text-center">{formatDate(a.endDate)}</td>
                     <td className="border p-2 text-center">
                       <button onClick={() => remove(a.id)} className="text-red-600 hover:underline">
-                        מחק
+                        {t('deleteBtn')}
                       </button>
                     </td>
                   </tr>

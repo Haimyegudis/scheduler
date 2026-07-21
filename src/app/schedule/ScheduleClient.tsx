@@ -6,11 +6,7 @@ import WeekNav from '@/components/WeekNav';
 import Loading from '@/components/Loading';
 import ScheduleTable, { type AssignmentView } from '@/components/ScheduleTable';
 import { getCurrentWeekStart, weekDates } from '@/lib/dates';
-
-const TECH_LINKS = [
-  { href: '/constraints', label: 'האילוצים שלי' },
-  { href: '/schedule', label: 'תוכנית משמרות' },
-];
+import { useT } from '@/lib/i18n';
 
 interface ScheduleData {
   schedule: { status: string; includeFriday: boolean; assignments: AssignmentView[] } | null;
@@ -18,6 +14,11 @@ interface ScheduleData {
 }
 
 export default function ScheduleClient({ name, technicianId }: { name: string; technicianId: number }) {
+  const { t } = useT();
+  const TECH_LINKS = [
+    { href: '/constraints', label: t('myConstraintsNav') },
+    { href: '/schedule', label: t('scheduleNav') },
+  ];
   const [weekStart, setWeekStart] = useState(getCurrentWeekStart());
   const [data, setData] = useState<ScheduleData | null>(null);
   const [error, setError] = useState('');
@@ -30,12 +31,12 @@ export default function ScheduleClient({ name, technicianId }: { name: string; t
       if (res.ok) {
         setData(await res.json());
       } else {
-        setError('שגיאה בטעינת נתונים');
+        setError(t('loadError'));
       }
     } catch {
-      setError('שגיאת תקשורת — נסה לרענן את הדף');
+      setError(t('networkErrorRefresh'));
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     load(weekStart);
@@ -50,10 +51,10 @@ export default function ScheduleClient({ name, technicianId }: { name: string; t
         {!data && !error ? (
           <Loading />
         ) : error && !data ? null : !data ? null : !data.schedule ? (
-          <p className="text-center text-gray-500 py-8">טרם פורסמה תוכנית לשבוע זה.</p>
+          <p className="text-center text-gray-500 py-8">{t('noScheduleYet')}</p>
         ) : (
           <>
-            <p className="text-sm text-gray-500 mb-2">המשמרות שלך מודגשות בכחול.</p>
+            <p className="text-sm text-gray-500 mb-2">{t('yourShiftsHighlighted')}</p>
             <ScheduleTable
               dates={weekDates(weekStart, data.schedule.includeFriday)}
               assignments={data.schedule.assignments}

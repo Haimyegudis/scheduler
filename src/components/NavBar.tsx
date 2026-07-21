@@ -2,6 +2,7 @@
 
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
+import { useT, LangToggle } from '@/lib/i18n';
 
 export default function NavBar({
   name,
@@ -12,6 +13,7 @@ export default function NavBar({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const { t } = useT();
 
   async function logout() {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -23,7 +25,7 @@ export default function NavBar({
     <header className="bg-white border-b px-4 py-3 flex items-center gap-4 flex-wrap">
       <span className="flex items-center gap-2 font-bold">
         <img src="/logo.png" alt="HP Indigo" className="h-8 w-auto rounded" />
-        שיבוץ משמרות
+        {t('appTitle')}
       </span>
       <nav className="flex gap-3">
         {links.map(l => (
@@ -37,8 +39,9 @@ export default function NavBar({
         ))}
       </nav>
       <div className="ms-auto flex items-center gap-3 text-sm">
-        <span className="text-gray-500">שלום, {name}</span>
-        <button onClick={logout} className="text-red-600 hover:underline">התנתקות</button>
+        <span className="text-gray-500">{t('hello')} {name}</span>
+        <button onClick={logout} className="text-red-600 hover:underline">{t('logout')}</button>
+        <LangToggle />
       </div>
     </header>
   );

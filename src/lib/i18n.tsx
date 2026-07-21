@@ -1,0 +1,336 @@
+'use client';
+
+import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
+
+export type Lang = 'he' | 'en';
+
+// Hebrew is the source of truth; English is the translation.
+const he = {
+  appTitle: 'שיבוץ משמרות',
+  metaTitle: 'שיבוץ משמרות | HP Indigo',
+  hello: 'שלום,',
+  logout: 'התנתקות',
+  loading: 'טוען...',
+
+  dashboardNav: 'לוח בקרה',
+  scheduleNav: 'תוכנית משמרות',
+  myConstraintsNav: 'האילוצים שלי',
+  usersNav: 'ניהול משתמשים',
+  absencesNav: 'היעדרויות',
+  reportsNav: 'דוחות',
+  adminName: 'מנהל',
+
+  loginTitle: 'התחברות',
+  registerTitle: 'הרשמה',
+  emailLabel: 'אימייל',
+  passwordLabel: 'סיסמה',
+  passwordMinLabel: 'סיסמה (8 תווים לפחות)',
+  fullNameLabel: 'שם מלא',
+  noAccount: 'אין לך חשבון?',
+  toRegister: 'להרשמה',
+  alreadyRegistered: 'כבר רשום?',
+  toLogin: 'להתחברות',
+  registerRestrictedNote: 'ההרשמה פתוחה רק למיילים שאושרו על ידי המנהל.',
+  unexpectedError: 'שגיאה לא צפויה',
+
+  prevWeek: 'שבוע קודם',
+  nextWeek: 'שבוע הבא',
+  weekOf: 'שבוע',
+
+  shiftStationHeader: 'משמרת / עמדה',
+  stationLabel: 'עמדה',
+
+  weekPublishedNotice: 'התוכנית לשבוע זה פורסמה — לא ניתן לשנות אילוצים.',
+  loadError: 'שגיאה בטעינת נתונים',
+  networkErrorRefresh: 'שגיאת תקשורת — נסה לרענן את הדף',
+  enteredByAdmin: '(הוזן על ידי המנהל)',
+  autoSavedNote: 'השינויים נשמרים אוטומטית.',
+  saveFailed: 'השמירה נכשלה',
+  networkErrorSaveFailed: 'שגיאת תקשורת — השמירה נכשלה',
+
+  noScheduleYet: 'טרם פורסמה תוכנית לשבוע זה.',
+  yourShiftsHighlighted: 'המשמרות שלך מודגשות בכחול.',
+
+  scheduleStatusLabel: 'סטטוס תוכנית:',
+  statusPublished: 'פורסמה',
+  statusDraft: 'טיוטה',
+  statusNone: 'אין תוכנית',
+  technicianConstraintsHeading: 'אילוצי טכנאים',
+  noTechniciansYet: 'אין עדיין טכנאים רשומים.',
+  technicianCol: 'טכנאי',
+  statusCol: 'סטטוס',
+
+  generateConfirm: 'יצירת תוכנית תדרוס את השיבוץ הקיים. להמשיך?',
+  absentPrefix: 'נעדר:',
+  doubleBookedWarning: 'משובץ פעמיים באותו יום',
+  constraintPrefix: 'אילוץ:',
+  noConstraintFilled: 'לא מילא אילוץ',
+  draftSaved: 'הטיוטה נשמרה',
+  scheduleGenerated: 'נוצרה תוכנית חדשה',
+  generateFailed: 'יצירת התוכנית נכשלה',
+  networkErrorGenerateFailed: 'שגיאת תקשורת — יצירת התוכנית נכשלה',
+  schedulePublishedMsg: 'התוכנית פורסמה! הטכנאים יכולים לצפות בה.',
+  publishFailed: 'הפרסום נכשל',
+  networkErrorPublishFailed: 'שגיאת תקשורת — הפרסום נכשל',
+  generateScheduleBtn: 'צור תוכנית',
+  saveDraftBtn: 'שמור טיוטה',
+  publishBtn: 'פרסם',
+  includeFridayLabel: 'כולל שישי',
+  statusPrefix: 'סטטוס:',
+  emptySelectOption: '— ריק —',
+  shiftsPerTechnicianHeading: 'משמרות לטכנאי (איזון)',
+
+  allowedEmailsHeading: 'מיילים מורשים להרשמה',
+  addBtn: 'הוסף',
+  noEmailsYetNote: 'אין מיילים ברשימה. רק מייל שנוסף כאן יוכל להירשם.',
+  removeBtn: 'הסר',
+  registeredUsersHeading: 'משתמשים רשומים',
+  nameCol: 'שם',
+  emailCol: 'מייל',
+  adminCol: 'מנהל',
+  meSuffix: '(אני)',
+  adminPermNote: 'הרשאת מנהל נכנסת לתוקף בכניסה הבאה של המשתמש. לא ניתן לשנות את ההרשאה של עצמך.',
+  genericError: 'שגיאה',
+  deleteFailed: 'המחיקה נכשלה',
+  networkError: 'שגיאת תקשורת',
+
+  addAbsenceHeading: 'הוספת היעדרות',
+  employeeLabel: 'עובד',
+  selectEmployeeOption: 'בחר עובד',
+  typeLabel: 'סוג',
+  fromDateLabel: 'מתאריך',
+  toDateInclusiveLabel: 'עד תאריך (כולל)',
+  absencesHeading: 'היעדרויות',
+  noAbsencesNote: 'אין היעדרויות.',
+  toDateCol: 'עד תאריך',
+  deleteBtn: 'מחק',
+
+  yearLabel: 'שנה',
+  monthLabel: 'חודש',
+  viewModeLabel: 'תצוגה',
+  byWorkerOption: 'לפי עובד',
+  byMachineOption: 'לפי מכונה',
+  vacationSummaryOption: 'סיכום חופשים',
+  machineStationLabel: 'מכונה (עמדה)',
+  selectEmployeeToShowReport: 'בחר עובד להצגת הדוח.',
+  vacationCol: 'חופשה',
+  sickCol: 'מחלה',
+  miluimCol: 'מילואים',
+  otherCol: 'אחר',
+  offMarkedCol: 'סימן חופש',
+  totalAbsenceCol: 'סה"כ היעדרות',
+  absenceDetailsHeading: 'פירוט היעדרויות',
+  noAbsencesThisYear: 'אין היעדרויות בשנה זו.',
+  totalLabel: 'סה"כ:',
+  noShiftsInPeriod: 'אין משמרות בתקופה זו (רק תוכניות שפורסמו נכללות).',
+  dateCol: 'תאריך',
+  dayCol: 'יום',
+  shiftCol: 'משמרת',
+} as const;
+
+const en: Record<keyof typeof he, string> = {
+  appTitle: 'Shift Scheduling',
+  metaTitle: 'Shift Scheduling | HP Indigo',
+  hello: 'Hello,',
+  logout: 'Log out',
+  loading: 'Loading...',
+
+  dashboardNav: 'Dashboard',
+  scheduleNav: 'Schedule',
+  myConstraintsNav: 'My Constraints',
+  usersNav: 'Manage Users',
+  absencesNav: 'Absences',
+  reportsNav: 'Reports',
+  adminName: 'Admin',
+
+  loginTitle: 'Log In',
+  registerTitle: 'Register',
+  emailLabel: 'Email',
+  passwordLabel: 'Password',
+  passwordMinLabel: 'Password (at least 8 characters)',
+  fullNameLabel: 'Full Name',
+  noAccount: "Don't have an account?",
+  toRegister: 'Register',
+  alreadyRegistered: 'Already registered?',
+  toLogin: 'Log in',
+  registerRestrictedNote: 'Registration is open only to emails approved by the admin.',
+  unexpectedError: 'Unexpected error',
+
+  prevWeek: 'Previous week',
+  nextWeek: 'Next week',
+  weekOf: 'Week',
+
+  shiftStationHeader: 'Shift / Station',
+  stationLabel: 'Station',
+
+  weekPublishedNotice: 'This week’s schedule has been published — constraints can no longer be changed.',
+  loadError: 'Error loading data',
+  networkErrorRefresh: 'Connection error — try refreshing the page',
+  enteredByAdmin: '(entered by admin)',
+  autoSavedNote: 'Changes are saved automatically.',
+  saveFailed: 'Save failed',
+  networkErrorSaveFailed: 'Connection error — save failed',
+
+  noScheduleYet: 'No schedule has been published for this week yet.',
+  yourShiftsHighlighted: 'Your shifts are highlighted in blue.',
+
+  scheduleStatusLabel: 'Schedule status:',
+  statusPublished: 'Published',
+  statusDraft: 'Draft',
+  statusNone: 'No schedule',
+  technicianConstraintsHeading: 'Technician Constraints',
+  noTechniciansYet: 'No technicians registered yet.',
+  technicianCol: 'Technician',
+  statusCol: 'Status',
+
+  generateConfirm: 'Generating a schedule will overwrite the existing assignments. Continue?',
+  absentPrefix: 'Absent:',
+  doubleBookedWarning: 'Assigned twice on the same day',
+  constraintPrefix: 'Constraint:',
+  noConstraintFilled: 'No constraint submitted',
+  draftSaved: 'Draft saved',
+  scheduleGenerated: 'New schedule generated',
+  generateFailed: 'Schedule generation failed',
+  networkErrorGenerateFailed: 'Connection error — schedule generation failed',
+  schedulePublishedMsg: 'Schedule published! Technicians can now view it.',
+  publishFailed: 'Publish failed',
+  networkErrorPublishFailed: 'Connection error — publish failed',
+  generateScheduleBtn: 'Generate schedule',
+  saveDraftBtn: 'Save draft',
+  publishBtn: 'Publish',
+  includeFridayLabel: 'Include Friday',
+  statusPrefix: 'Status:',
+  emptySelectOption: '— Empty —',
+  shiftsPerTechnicianHeading: 'Shifts per technician (balance)',
+
+  allowedEmailsHeading: 'Emails approved for registration',
+  addBtn: 'Add',
+  noEmailsYetNote: 'No emails on the list. Only an email added here can register.',
+  removeBtn: 'Remove',
+  registeredUsersHeading: 'Registered Users',
+  nameCol: 'Name',
+  emailCol: 'Email',
+  adminCol: 'Admin',
+  meSuffix: '(me)',
+  adminPermNote: 'Admin permission takes effect the next time the user logs in. You cannot change your own permission.',
+  genericError: 'Error',
+  deleteFailed: 'Delete failed',
+  networkError: 'Connection error',
+
+  addAbsenceHeading: 'Add Absence',
+  employeeLabel: 'Employee',
+  selectEmployeeOption: 'Select employee',
+  typeLabel: 'Type',
+  fromDateLabel: 'From date',
+  toDateInclusiveLabel: 'To date (inclusive)',
+  absencesHeading: 'Absences',
+  noAbsencesNote: 'No absences.',
+  toDateCol: 'To date',
+  deleteBtn: 'Delete',
+
+  yearLabel: 'Year',
+  monthLabel: 'Month',
+  viewModeLabel: 'View',
+  byWorkerOption: 'By worker',
+  byMachineOption: 'By machine',
+  vacationSummaryOption: 'Vacation summary',
+  machineStationLabel: 'Machine (station)',
+  selectEmployeeToShowReport: 'Select an employee to show the report.',
+  vacationCol: 'Vacation',
+  sickCol: 'Sick',
+  miluimCol: 'Miluim (reserve duty)',
+  otherCol: 'Other',
+  offMarkedCol: 'Off marked',
+  totalAbsenceCol: 'Total absence',
+  absenceDetailsHeading: 'Absence details',
+  noAbsencesThisYear: 'No absences this year.',
+  totalLabel: 'Total:',
+  noShiftsInPeriod: 'No shifts in this period (only published schedules are included).',
+  dateCol: 'Date',
+  dayCol: 'Day',
+  shiftCol: 'Shift',
+};
+
+const dict = { he, en };
+export type DictKey = keyof typeof he;
+
+// Known Hebrew API error messages, translated client-side for English mode.
+// Server responses always stay Hebrew; fallback is to show the raw message as-is.
+const apiErrorMap: Record<string, string> = {
+  'נדרשת התחברות': 'Login required',
+  'שבוע לא תקין': 'Invalid week',
+  'אין הרשאה': 'Not authorized',
+  'טווח תאריכים לא תקין': 'Invalid date range',
+  'נתונים לא תקינים': 'Invalid data',
+  'התוכנית לשבוע זה כבר פורסמה — לא ניתן לשנות אילוצים': 'This week’s schedule has already been published — constraints can no longer be changed',
+  'ביום זה מוגדרת היעדרות — פנה למנהל': 'An absence is recorded for this day — contact the admin',
+  'נתוני שיבוץ לא תקינים': 'Invalid schedule data',
+  'לא ניתן לשבץ עובד ביום חופש או היעדרות': 'Cannot assign an employee on a day off or absence',
+  'נא למלא שם, מייל וסיסמה באורך 8 תווים לפחות': 'Please fill in name, email, and a password of at least 8 characters',
+  'המייל אינו מורשה להרשמה. פנה למנהל.': 'This email is not authorized to register. Contact the admin.',
+  'המייל כבר רשום במערכת': 'This email is already registered',
+  'לא ניתן לשנות את ההרשאה של עצמך': 'You cannot change your own permission',
+  'משתמש לא נמצא': 'User not found',
+  'מייל או סיסמה שגויים': 'Incorrect email or password',
+  'נתוני היעדרות לא תקינים': 'Invalid absence data',
+  'עובד לא נמצא': 'Employee not found',
+  'לא ניתן להזין היעדרות למנהל': 'Cannot record an absence for an admin',
+  'כתובת מייל לא תקינה': 'Invalid email address',
+  'המייל כבר ברשימה': 'Email is already on the list',
+  'אין תוכנית לשבוע זה': 'No schedule for this week',
+};
+
+// Non-hook translator for use in server components (e.g. generateMetadata).
+export function tFor(lang: Lang, key: DictKey): string {
+  return dict[lang][key] ?? dict.he[key];
+}
+
+export function translateApiError(lang: Lang, message: string | undefined | null): string {
+  if (!message) return '';
+  if (lang === 'he') return message;
+  return apiErrorMap[message] ?? message;
+}
+
+interface I18nContextValue {
+  lang: Lang;
+  t: (key: DictKey) => string;
+  setLang: (lang: Lang) => void;
+}
+
+const I18nContext = createContext<I18nContextValue | null>(null);
+
+export function I18nProvider({ initialLang, children }: { initialLang: Lang; children: ReactNode }) {
+  const [lang, setLangState] = useState<Lang>(initialLang);
+
+  const setLang = useCallback((next: Lang) => {
+    document.cookie = `lang=${next}; path=/; max-age=31536000`;
+    setLangState(next);
+    if (typeof window !== 'undefined') {
+      window.location.reload();
+    }
+  }, []);
+
+  const t = useCallback((key: DictKey) => dict[lang][key] ?? dict.he[key] ?? key, [lang]);
+
+  return <I18nContext.Provider value={{ lang, t, setLang }}>{children}</I18nContext.Provider>;
+}
+
+export function useT(): I18nContextValue {
+  const ctx = useContext(I18nContext);
+  if (!ctx) throw new Error('useT must be used within an I18nProvider');
+  return ctx;
+}
+
+export function LangToggle({ className }: { className?: string }) {
+  const { lang, setLang } = useT();
+  return (
+    <button
+      type="button"
+      onClick={() => setLang(lang === 'he' ? 'en' : 'he')}
+      aria-label="Toggle language"
+      className={className ?? 'text-sm border rounded px-2 py-1 hover:bg-gray-100 shrink-0'}
+    >
+      {lang === 'he' ? 'EN' : 'עב'}
+    </button>
+  );
+}

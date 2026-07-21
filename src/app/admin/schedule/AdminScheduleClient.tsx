@@ -5,15 +5,16 @@ import NavBar from '@/components/NavBar';
 import WeekNav from '@/components/WeekNav';
 import Loading from '@/components/Loading';
 import { getCurrentWeekStart, weekDates, dayName, formatDate } from '@/lib/dates';
-import { SHIFT_LABELS, CONSTRAINT_LABELS, ABSENCE_LABELS } from '@/lib/labels';
+import { shiftLabel, constraintLabel, absenceLabel } from '@/lib/labels';
+import { useT, translateApiError } from '@/lib/i18n';
 
-const ADMIN_LINKS = [
-  { href: '/admin', label: 'לוח בקרה' },
-  { href: '/admin/schedule', label: 'תוכנית משמרות' },
-  { href: '/admin/users', label: 'ניהול משתמשים' },
-  { href: '/admin/absences', label: 'היעדרויות' },
-  { href: '/admin/reports', label: 'דוחות' },
-];
+const ADMIN_LINKS_KEYS = [
+  { href: '/admin', key: 'dashboardNav' },
+  { href: '/admin/schedule', key: 'scheduleNav' },
+  { href: '/admin/users', key: 'usersNav' },
+  { href: '/admin/absences', key: 'absencesNav' },
+  { href: '/admin/reports', key: 'reportsNav' },
+] as const;
 
 const SHIFTS = ['morning', 'evening'] as const;
 const STATIONS = [1, 2, 3, 4];
@@ -24,6 +25,8 @@ const key = (date: string, shift: string, station: number): CellKey => `${date}|
 interface Tech { id: number; name: string }
 
 export default function AdminScheduleClient() {
+  const { t, lang } = useT();
+  const ADMIN_LINKS = ADMIN_LINKS_KEYS.map(l => ({ href: l.href, label: t(l.key) }));
   const [weekStart, setWeekStart] = useState(getCurrentWeekStart());
   const [includeFriday, setIncludeFriday] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -56,14 +59,14 @@ export default function AdminScheduleClient() {
         }
         setCells(next);
       } else {
-        setMessage('שגיאה בטעינת נתונים');
+        setMessage(t('loadError'));
       }
     } catch {
-      setMessage('שגיאת תקשורת — נסה לרענן את הדף');
+      setMessage(t('networkErrorRefresh'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     load(weekStart);
@@ -91,12 +94,12 @@ export default function AdminScheduleClient() {
   function warningsFor(date: string, shift: string, techId: number | ''): string | null {
     if (techId === '') return null;
     const abs = absences[String(techId)]?.[date];
-    if (abs) return `נעדר: ${ABSENCE_LABELS[abs]}`;
+    if (abs) return `${t('absentPrefix')} ${absenceLabel(lang, abs)}`;
     const c = constraints[String(techId)]?.[date];
     const okByConstraint = c === shift || c === 'flex';
     const timesToday = assignmentsPayload.filter(a => a.date === date && a.technicianId === techId).length;
-    if (timesToday > 1) return 'משובץ פעמיים באותו יום';
-    if (!okByConstraint) return c ? `אילוץ: ${CONSTRAINT_LABELS[c]}` : 'לא מילא אילוץ';
+    if (timesToday > 1) return t('doubleBookedWarning');
+    if (!okByConstraint) return c ? `${t('constraintPrefix')} ${constraintLabel(lang, c)}` : t('noConstraintFilled');
     return null;
   }
 
@@ -112,15 +115,15 @@ export default function AdminScheduleClient() {
         }),
       });
       if (res.ok) {
-        setMessage('הטיוטה נשמרה');
+        setMessage(t('draftSaved'));
         if (status === null) setStatus('draft');
         return true;
       }
       const data = await res.json().catch(() => ({}));
-      setMessage(data.error ?? 'השמירה נכשלה');
+      setMessage(data.error ? translateApiError(lang, data.error) : t('saveFailed'));
       return false;
     } catch {
-      setMessage('שגיאת תקשורת — השמירה נכשלה');
+      setMessage(t('networkErrorSaveFailed'));
       return false;
     }
   }
@@ -137,20 +140,20 @@ export default function AdminScheduleClient() {
 
   async function generate() {
     try {
-      if (Object.keys(cells).length > 0 && !confirm('יצירת תוכנית תדרוס את השיבוץ הקיים. להמשיך?')) return;
+      if (Object.keys(cells).length > 0 && !confirm(t('generateConfirm'))) return;
       const res = await fetch('/api/admin/schedule/generate', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ weekStart, includeFriday }),
       });
       if (res.ok) {
-        setMessage('נוצרה תוכנית חדשה');
+        setMessage(t('scheduleGenerated'));
         await load(weekStart);
       } else {
-        setMessage('יצירת התוכנית נכשלה');
+        setMessage(t('generateFailed'));
       }
     } catch {
-      setMessage('שגיאת תקשורת — יצירת התוכנית נכשלה');
+      setMessage(t('networkErrorGenerateFailed'));
     }
   }
 
@@ -164,18 +167,18 @@ export default function AdminScheduleClient() {
       });
       if (res.ok) {
         setStatus('published');
-        setMessage('התוכנית פורסמה! הטכנאים יכולים לצפות בה.');
+        setMessage(t('schedulePublishedMsg'));
       } else {
-        setMessage('הפרסום נכשל');
+        setMessage(t('publishFailed'));
       }
     } catch {
-      setMessage('שגיאת תקשורת — הפרסום נכשל');
+      setMessage(t('networkErrorPublishFailed'));
     }
   }
 
   return (
     <div>
-      <NavBar name="מנהל" links={ADMIN_LINKS} />
+      <NavBar name={t('adminName')} links={ADMIN_LINKS} />
       <main className="max-w-6xl mx-auto p-4">
         <WeekNav weekStart={weekStart} onChange={setWeekStart} />
         {loading ? (
@@ -184,20 +187,20 @@ export default function AdminScheduleClient() {
           <>
             <div className="flex flex-wrap items-center gap-3 mb-4">
               <button onClick={generate} className="bg-blue-600 text-white rounded px-4 py-2 hover:bg-blue-700">
-                צור תוכנית
+                {t('generateScheduleBtn')}
               </button>
               <button onClick={() => saveDraft()} className="bg-white border rounded px-4 py-2 hover:bg-gray-100">
-                שמור טיוטה
+                {t('saveDraftBtn')}
               </button>
               <button onClick={publish} className="bg-green-600 text-white rounded px-4 py-2 hover:bg-green-700">
-                פרסם
+                {t('publishBtn')}
               </button>
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={includeFriday} onChange={e => toggleFriday(e.target.checked)} />
-                כולל שישי
+                {t('includeFridayLabel')}
               </label>
               <span className="ms-auto text-sm text-gray-500">
-                סטטוס: {status === 'published' ? 'פורסמה' : status === 'draft' ? 'טיוטה' : 'אין תוכנית'}
+                {t('statusPrefix')} {status === 'published' ? t('statusPublished') : status === 'draft' ? t('statusDraft') : t('statusNone')}
               </span>
             </div>
             {message && <p className="text-sm text-blue-700 mb-3">{message}</p>}
@@ -205,10 +208,10 @@ export default function AdminScheduleClient() {
               <table className="w-full bg-white rounded-lg shadow-sm text-sm border-collapse">
                 <thead>
                   <tr>
-                    <th className="border p-2 bg-gray-100">משמרת / עמדה</th>
+                    <th className="border p-2 bg-gray-100">{t('shiftStationHeader')}</th>
                     {dates.map(d => (
                       <th key={d} className="border p-2 bg-gray-100">
-                        {dayName(d)}
+                        {dayName(d, lang)}
                         <div className="text-xs text-gray-400 font-normal">{formatDate(d)}</div>
                       </th>
                     ))}
@@ -219,7 +222,7 @@ export default function AdminScheduleClient() {
                     STATIONS.map(station => (
                       <tr key={`${shift}-${station}`}>
                         <td className="border p-2 bg-gray-50 whitespace-nowrap">
-                          {SHIFT_LABELS[shift]} · עמדה {station}
+                          {shiftLabel(lang, shift)} · {t('stationLabel')} {station}
                         </td>
                         {dates.map(date => {
                           const k = key(date, shift, station);
@@ -234,16 +237,16 @@ export default function AdminScheduleClient() {
                                 }
                                 className="w-full border-0 bg-transparent text-center"
                               >
-                                <option value="">— ריק —</option>
+                                <option value="">{t('emptySelectOption')}</option>
                                 {technicians
                                   .filter(
-                                    t =>
-                                      (constraints[String(t.id)]?.[date] !== 'off' &&
-                                        !absences[String(t.id)]?.[date]) ||
-                                      t.id === techId
+                                    tc =>
+                                      (constraints[String(tc.id)]?.[date] !== 'off' &&
+                                        !absences[String(tc.id)]?.[date]) ||
+                                      tc.id === techId
                                   )
-                                  .map(t => (
-                                    <option key={t.id} value={t.id}>{t.name}</option>
+                                  .map(tc => (
+                                    <option key={tc.id} value={tc.id}>{tc.name}</option>
                                   ))}
                               </select>
                               {warning && <div className="text-xs text-orange-600 text-center">⚠ {warning}</div>}
@@ -256,11 +259,11 @@ export default function AdminScheduleClient() {
                 </tbody>
               </table>
             </div>
-            <h3 className="font-bold mt-6 mb-2">משמרות לטכנאי (איזון)</h3>
+            <h3 className="font-bold mt-6 mb-2">{t('shiftsPerTechnicianHeading')}</h3>
             <div className="flex flex-wrap gap-2 text-sm">
-              {technicians.map(t => (
-                <span key={t.id} className="bg-white border rounded-full px-3 py-1">
-                  {t.name}: {shiftCounts.get(t.id) ?? 0}
+              {technicians.map(tc => (
+                <span key={tc.id} className="bg-white border rounded-full px-3 py-1">
+                  {tc.name}: {shiftCounts.get(tc.id) ?? 0}
                 </span>
               ))}
             </div>

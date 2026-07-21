@@ -5,16 +5,17 @@ import NavBar from '@/components/NavBar';
 import WeekNav from '@/components/WeekNav';
 import Loading from '@/components/Loading';
 import { getCurrentWeekStart, weekDates, dayName, formatDate } from '@/lib/dates';
-import { CONSTRAINT_LABELS, ABSENCE_LABELS } from '@/lib/labels';
-
-const TECH_LINKS = [
-  { href: '/constraints', label: 'האילוצים שלי' },
-  { href: '/schedule', label: 'תוכנית משמרות' },
-];
+import { constraintLabel, absenceLabel } from '@/lib/labels';
+import { useT, translateApiError } from '@/lib/i18n';
 
 const OPTIONS = ['morning', 'evening', 'flex', 'off'];
 
 export default function ConstraintsClient({ name }: { name: string }) {
+  const { t, lang } = useT();
+  const TECH_LINKS = [
+    { href: '/constraints', label: t('myConstraintsNav') },
+    { href: '/schedule', label: t('scheduleNav') },
+  ];
   const [weekStart, setWeekStart] = useState(getCurrentWeekStart());
   const [constraints, setConstraints] = useState<Record<string, string>>({});
   const [absences, setAbsences] = useState<Record<string, string>>({});
@@ -35,14 +36,14 @@ export default function ConstraintsClient({ name }: { name: string }) {
         setIncludeFriday(data.includeFriday);
         setPublished(data.published);
       } else {
-        setError('שגיאה בטעינת נתונים');
+        setError(t('loadError'));
       }
     } catch {
-      setError('שגיאת תקשורת — נסה לרענן את הדף');
+      setError(t('networkErrorRefresh'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     load(weekStart);
@@ -61,11 +62,11 @@ export default function ConstraintsClient({ name }: { name: string }) {
       if (!res.ok) {
         setConstraints(prev);
         const data = await res.json().catch(() => ({}));
-        setError(data.error ?? 'השמירה נכשלה');
+        setError(data.error ? translateApiError(lang, data.error) : t('saveFailed'));
       }
     } catch {
       setConstraints(prev);
-      setError('שגיאת תקשורת — השמירה נכשלה');
+      setError(t('networkErrorSaveFailed'));
     }
   }
 
@@ -78,7 +79,7 @@ export default function ConstraintsClient({ name }: { name: string }) {
         <WeekNav weekStart={weekStart} onChange={setWeekStart} />
         {published && (
           <p className="bg-yellow-100 text-yellow-800 rounded p-3 mb-4 text-sm">
-            התוכנית לשבוע זה פורסמה — לא ניתן לשנות אילוצים.
+            {t('weekPublishedNotice')}
           </p>
         )}
         {error && <p className="text-red-600 text-sm mb-2">{error}</p>}
@@ -89,11 +90,11 @@ export default function ConstraintsClient({ name }: { name: string }) {
             {dates.map(date => (
               <div key={date} className="bg-white rounded-lg shadow-sm p-3 flex flex-wrap items-center gap-2">
                 <span className="font-semibold w-24">
-                  {dayName(date)} <span className="text-gray-400 text-sm">{formatDate(date)}</span>
+                  {dayName(date, lang)} <span className="text-gray-400 text-sm">{formatDate(date)}</span>
                 </span>
                 {absences[date] ? (
                   <span className="px-3 py-1.5 rounded-full text-sm bg-purple-100 text-purple-800">
-                    {ABSENCE_LABELS[absences[date]]} (הוזן על ידי המנהל)
+                    {absenceLabel(lang, absences[date])} {t('enteredByAdmin')}
                   </span>
                 ) : (
                   <div className="flex gap-2 flex-wrap">
@@ -108,14 +109,14 @@ export default function ConstraintsClient({ name }: { name: string }) {
                             : 'bg-white hover:bg-gray-100'
                         } ${published ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
-                        {CONSTRAINT_LABELS[opt]}
+                        {constraintLabel(lang, opt)}
                       </button>
                     ))}
                   </div>
                 )}
               </div>
             ))}
-            <p className="text-xs text-gray-400">השינויים נשמרים אוטומטית.</p>
+            <p className="text-xs text-gray-400">{t('autoSavedNote')}</p>
           </div>
         )}
       </main>

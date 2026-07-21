@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useT, translateApiError, LangToggle } from '@/lib/i18n';
 
 export interface Field {
   name: string;
@@ -26,6 +27,7 @@ export default function AuthForm({
   footer?: React.ReactNode;
 }) {
   const router = useRouter();
+  const { t, lang } = useT();
   const [values, setValues] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -45,13 +47,16 @@ export default function AuthForm({
       router.refresh();
     } else {
       const data = await res.json().catch(() => ({}));
-      setError(data.error ?? 'שגיאה לא צפויה');
+      setError(data.error ? translateApiError(lang, data.error) : t('unexpectedError'));
     }
   }
 
   return (
     <main className="min-h-screen flex items-center justify-center p-4">
       <form onSubmit={submit} className="bg-white rounded-xl shadow p-6 w-full max-w-sm space-y-4">
+        <div className="flex justify-end">
+          <LangToggle />
+        </div>
         <img src="/logo.png" alt="HP Indigo" className="h-16 w-auto rounded-lg mx-auto" />
         <h1 className="text-xl font-bold text-center">{title}</h1>
         {fields.map(f => (

@@ -1,19 +1,23 @@
+'use client';
+
 import Link from 'next/link';
 import AuthForm from '@/components/AuthForm';
+import { useT } from '@/lib/i18n';
 
 export default function LoginPage() {
+  const { t } = useT();
   return (
     <AuthForm
-      title="התחברות"
+      title={t('loginTitle')}
       endpoint="/api/auth/login"
       redirectTo="/"
       fields={[
-        { name: 'email', label: 'אימייל', type: 'email', autoComplete: 'email' },
-        { name: 'password', label: 'סיסמה', type: 'password', autoComplete: 'current-password' },
+        { name: 'email', label: t('emailLabel'), type: 'email', autoComplete: 'email' },
+        { name: 'password', label: t('passwordLabel'), type: 'password', autoComplete: 'current-password' },
       ]}
       footer={
         <>
-          אין לך חשבון? <Link href="/register" className="text-blue-600 hover:underline">להרשמה</Link>
+          {t('noAccount')} <Link href="/register" className="text-blue-600 hover:underline">{t('toRegister')}</Link>
         </>
       }
     />

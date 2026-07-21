@@ -1,5 +1,8 @@
+'use client';
+
 import { dayName, formatDate } from '@/lib/dates';
-import { SHIFT_LABELS } from '@/lib/labels';
+import { shiftLabel } from '@/lib/labels';
+import { useT } from '@/lib/i18n';
 
 export interface AssignmentView {
   date: string;
@@ -19,6 +22,7 @@ export default function ScheduleTable({
   technicians: Array<{ id: number; name: string }>;
   highlightTechId?: number;
 }) {
+  const { t, lang } = useT();
   const nameOf = (id: number) => technicians.find(t => t.id === id)?.name ?? '?';
   const cell = (date: string, shift: string, station: number) =>
     assignments.find(a => a.date === date && a.shift === shift && a.station === station);
@@ -28,10 +32,10 @@ export default function ScheduleTable({
       <table className="w-full bg-white rounded-lg shadow-sm text-sm border-collapse">
         <thead>
           <tr>
-            <th className="border p-2 bg-gray-100">משמרת / עמדה</th>
+            <th className="border p-2 bg-gray-100">{t('shiftStationHeader')}</th>
             {dates.map(d => (
               <th key={d} className="border p-2 bg-gray-100">
-                {dayName(d)}
+                {dayName(d, lang)}
                 <div className="text-xs text-gray-400 font-normal">{formatDate(d)}</div>
               </th>
             ))}
@@ -42,7 +46,7 @@ export default function ScheduleTable({
             [1, 2, 3, 4].map(station => (
               <tr key={`${shift}-${station}`}>
                 <td className="border p-2 bg-gray-50 whitespace-nowrap">
-                  {SHIFT_LABELS[shift]} · עמדה {station}
+                  {shiftLabel(lang, shift)} · {t('stationLabel')} {station}
                 </td>
                 {dates.map(date => {
                   const a = cell(date, shift, station);

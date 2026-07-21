@@ -4,15 +4,16 @@ import { useCallback, useEffect, useState } from 'react';
 import NavBar from '@/components/NavBar';
 import Loading from '@/components/Loading';
 import { dayName, formatDate } from '@/lib/dates';
-import { SHIFT_LABELS, ABSENCE_LABELS } from '@/lib/labels';
+import { shiftLabel, absenceLabel } from '@/lib/labels';
+import { useT } from '@/lib/i18n';
 
-const ADMIN_LINKS = [
-  { href: '/admin', label: 'לוח בקרה' },
-  { href: '/admin/schedule', label: 'תוכנית משמרות' },
-  { href: '/admin/users', label: 'ניהול משתמשים' },
-  { href: '/admin/absences', label: 'היעדרויות' },
-  { href: '/admin/reports', label: 'דוחות' },
-];
+const ADMIN_LINKS_KEYS = [
+  { href: '/admin', key: 'dashboardNav' },
+  { href: '/admin/schedule', key: 'scheduleNav' },
+  { href: '/admin/users', key: 'usersNav' },
+  { href: '/admin/absences', key: 'absencesNav' },
+  { href: '/admin/reports', key: 'reportsNav' },
+] as const;
 
 interface ReportRow {
   date: string;
@@ -53,6 +54,8 @@ function monthRange(month: string): { from: string; to: string } {
 }
 
 export default function AdminReportsClient() {
+  const { t, lang } = useT();
+  const ADMIN_LINKS = ADMIN_LINKS_KEYS.map(l => ({ href: l.href, label: t(l.key) }));
   const [month, setMonth] = useState(currentMonth());
   const [mode, setMode] = useState<'worker' | 'machine' | 'vacations'>('worker');
   const [workerId, setWorkerId] = useState('');
@@ -116,12 +119,12 @@ export default function AdminReportsClient() {
 
   return (
     <div>
-      <NavBar name="מנהל" links={ADMIN_LINKS} />
+      <NavBar name={t('adminName')} links={ADMIN_LINKS} />
       <main className="max-w-3xl mx-auto p-4 space-y-4">
         <div className="bg-white rounded-lg shadow-sm p-4 flex flex-wrap items-end gap-3">
           {mode === 'vacations' ? (
             <label className="block text-sm">
-              שנה
+              {t('yearLabel')}
               <select
                 value={year}
                 onChange={e => setYear(e.target.value)}
@@ -134,7 +137,7 @@ export default function AdminReportsClient() {
             </label>
           ) : (
             <label className="block text-sm">
-              חודש
+              {t('monthLabel')}
               <input
                 type="month"
                 value={month}
@@ -144,41 +147,41 @@ export default function AdminReportsClient() {
             </label>
           )}
           <label className="block text-sm">
-            תצוגה
+            {t('viewModeLabel')}
             <select
               value={mode}
               onChange={e => setMode(e.target.value as 'worker' | 'machine' | 'vacations')}
               className="block mt-1 border rounded px-2 py-1.5"
             >
-              <option value="worker">לפי עובד</option>
-              <option value="machine">לפי מכונה</option>
-              <option value="vacations">סיכום חופשים</option>
+              <option value="worker">{t('byWorkerOption')}</option>
+              <option value="machine">{t('byMachineOption')}</option>
+              <option value="vacations">{t('vacationSummaryOption')}</option>
             </select>
           </label>
           {mode === 'worker' ? (
             <label className="block text-sm">
-              עובד
+              {t('employeeLabel')}
               <select
                 value={workerId}
                 onChange={e => setWorkerId(e.target.value)}
                 className="block mt-1 border rounded px-2 py-1.5 min-w-36"
               >
-                <option value="">בחר עובד</option>
-                {techs.map(t => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
+                <option value="">{t('selectEmployeeOption')}</option>
+                {techs.map(tc => (
+                  <option key={tc.id} value={tc.id}>{tc.name}</option>
                 ))}
               </select>
             </label>
           ) : mode === 'machine' ? (
             <label className="block text-sm">
-              מכונה (עמדה)
+              {t('machineStationLabel')}
               <select
                 value={station}
                 onChange={e => setStation(e.target.value)}
                 className="block mt-1 border rounded px-2 py-1.5"
               >
                 {[1, 2, 3, 4].map(s => (
-                  <option key={s} value={s}>עמדה {s}</option>
+                  <option key={s} value={s}>{t('stationLabel')} {s}</option>
                 ))}
               </select>
             </label>
@@ -187,20 +190,20 @@ export default function AdminReportsClient() {
         {loading ? (
           <Loading />
         ) : mode === 'worker' && !workerId ? (
-          <p className="text-center text-gray-500 py-8">בחר עובד להצגת הדוח.</p>
+          <p className="text-center text-gray-500 py-8">{t('selectEmployeeToShowReport')}</p>
         ) : mode === 'vacations' ? (
           <>
             <div className="overflow-x-auto">
               <table className="w-full bg-white rounded-lg shadow-sm text-sm border-collapse">
                 <thead>
                   <tr>
-                    <th className="border p-2 bg-gray-100 text-start">עובד</th>
-                    <th className="border p-2 bg-gray-100">חופשה</th>
-                    <th className="border p-2 bg-gray-100">מחלה</th>
-                    <th className="border p-2 bg-gray-100">מילואים</th>
-                    <th className="border p-2 bg-gray-100">אחר</th>
-                    <th className="border p-2 bg-gray-100">סימן חופש</th>
-                    <th className="border p-2 bg-gray-100">סה"כ היעדרות</th>
+                    <th className="border p-2 bg-gray-100 text-start">{t('employeeLabel')}</th>
+                    <th className="border p-2 bg-gray-100">{t('vacationCol')}</th>
+                    <th className="border p-2 bg-gray-100">{t('sickCol')}</th>
+                    <th className="border p-2 bg-gray-100">{t('miluimCol')}</th>
+                    <th className="border p-2 bg-gray-100">{t('otherCol')}</th>
+                    <th className="border p-2 bg-gray-100">{t('offMarkedCol')}</th>
+                    <th className="border p-2 bg-gray-100">{t('totalAbsenceCol')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -218,9 +221,9 @@ export default function AdminReportsClient() {
                 </tbody>
               </table>
             </div>
-            <h3 className="font-bold mt-4 mb-2">פירוט היעדרויות ({year})</h3>
+            <h3 className="font-bold mt-4 mb-2">{t('absenceDetailsHeading')} ({year})</h3>
             {absenceRows.filter(a => a.startDate <= `${year}-12-31` && a.endDate >= `${year}-01-01`).length === 0 ? (
-              <p className="text-gray-500 text-sm">אין היעדרויות בשנה זו.</p>
+              <p className="text-gray-500 text-sm">{t('noAbsencesThisYear')}</p>
             ) : (
               <ul className="bg-white rounded-lg shadow-sm divide-y text-sm">
                 {absenceRows
@@ -228,7 +231,7 @@ export default function AdminReportsClient() {
                   .map(a => (
                     <li key={a.id} className="px-3 py-2 flex flex-wrap gap-2">
                       <span className="font-semibold">{a.technicianName}</span>
-                      <span>{ABSENCE_LABELS[a.type]}</span>
+                      <span>{absenceLabel(lang, a.type)}</span>
                       <span className="text-gray-500">
                         {formatDate(a.startDate)} – {formatDate(a.endDate)}
                       </span>
@@ -240,22 +243,22 @@ export default function AdminReportsClient() {
         ) : (
           <>
             <div className="flex gap-2 text-sm">
-              <span className="bg-white border rounded-full px-3 py-1">סה"כ: {filtered.length}</span>
-              <span className="bg-white border rounded-full px-3 py-1">בוקר: {morningCount}</span>
-              <span className="bg-white border rounded-full px-3 py-1">ערב: {eveningCount}</span>
+              <span className="bg-white border rounded-full px-3 py-1">{t('totalLabel')} {filtered.length}</span>
+              <span className="bg-white border rounded-full px-3 py-1">{shiftLabel(lang, 'morning')}: {morningCount}</span>
+              <span className="bg-white border rounded-full px-3 py-1">{shiftLabel(lang, 'evening')}: {eveningCount}</span>
             </div>
             {filtered.length === 0 ? (
-              <p className="text-gray-500 text-sm">אין משמרות בתקופה זו (רק תוכניות שפורסמו נכללות).</p>
+              <p className="text-gray-500 text-sm">{t('noShiftsInPeriod')}</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full bg-white rounded-lg shadow-sm text-sm border-collapse">
                   <thead>
                     <tr>
-                      <th className="border p-2 bg-gray-100">תאריך</th>
-                      <th className="border p-2 bg-gray-100">יום</th>
-                      <th className="border p-2 bg-gray-100">משמרת</th>
+                      <th className="border p-2 bg-gray-100">{t('dateCol')}</th>
+                      <th className="border p-2 bg-gray-100">{t('dayCol')}</th>
+                      <th className="border p-2 bg-gray-100">{t('shiftCol')}</th>
                       <th className="border p-2 bg-gray-100">
-                        {mode === 'worker' ? 'מכונה (עמדה)' : 'עובד'}
+                        {mode === 'worker' ? t('machineStationLabel') : t('employeeLabel')}
                       </th>
                     </tr>
                   </thead>
@@ -263,10 +266,10 @@ export default function AdminReportsClient() {
                     {filtered.map((r, i) => (
                       <tr key={i}>
                         <td className="border p-2 text-center">{formatDate(r.date)}</td>
-                        <td className="border p-2 text-center">{dayName(r.date)}</td>
-                        <td className="border p-2 text-center">{SHIFT_LABELS[r.shift]}</td>
+                        <td className="border p-2 text-center">{dayName(r.date, lang)}</td>
+                        <td className="border p-2 text-center">{shiftLabel(lang, r.shift)}</td>
                         <td className="border p-2 text-center">
-                          {mode === 'worker' ? `עמדה ${r.station}` : r.technicianName}
+                          {mode === 'worker' ? `${t('stationLabel')} ${r.station}` : r.technicianName}
                         </td>
                       </tr>
                     ))}

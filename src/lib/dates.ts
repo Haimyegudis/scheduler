@@ -1,4 +1,4 @@
-const HEBREW_DAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+import { dayNameByIndex } from './labels';
 
 function toDate(iso: string): Date {
   return new Date(`${iso}T00:00:00Z`);
@@ -28,8 +28,8 @@ export function getCurrentWeekStart(now: Date = new Date()): string {
   return weekStartOf(iso);
 }
 
-export function dayName(date: string): string {
-  return HEBREW_DAYS[toDate(date).getUTCDay()];
+export function dayName(date: string, lang: 'he' | 'en' = 'he'): string {
+  return dayNameByIndex(lang, toDate(date).getUTCDay());
 }
 
 export function formatDate(date: string): string {
