@@ -9,6 +9,7 @@ export interface Field {
   label: string;
   type: 'text' | 'email' | 'password';
   minLength?: number;
+  autoComplete?: string;
 }
 
 export default function AuthForm({
@@ -57,16 +58,19 @@ export default function AuthForm({
             <span className="text-sm text-gray-600">{f.label}</span>
             <input
               type={f.type}
+              name={f.name}
+              id={`auth-${f.name}`}
               required
               minLength={f.minLength}
               value={values[f.name] ?? ''}
               onChange={e => setValues(v => ({ ...v, [f.name]: e.target.value }))}
               className="mt-1 w-full border rounded px-3 py-2"
               dir={f.type === 'email' ? 'ltr' : undefined}
+              autoComplete={f.autoComplete}
             />
           </label>
         ))}
-        {error && <p className="text-red-600 text-sm">{error}</p>}
+        {error && <p role="alert" className="text-red-600 text-sm">{error}</p>}
         <button
           type="submit"
           disabled={busy}

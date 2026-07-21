@@ -8,8 +8,8 @@ export default function LoginPage() {
       endpoint="/api/auth/login"
       redirectTo="/"
       fields={[
-        { name: 'email', label: 'אימייל', type: 'email' },
-        { name: 'password', label: 'סיסמה', type: 'password' },
+        { name: 'email', label: 'אימייל', type: 'email', autoComplete: 'email' },
+        { name: 'password', label: 'סיסמה', type: 'password', autoComplete: 'current-password' },
       ]}
       footer={
         <>

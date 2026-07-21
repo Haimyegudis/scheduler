@@ -8,9 +8,9 @@ export default function RegisterPage() {
       endpoint="/api/auth/register"
       redirectTo="/"
       fields={[
-        { name: 'name', label: 'שם מלא', type: 'text' },
-        { name: 'email', label: 'אימייל', type: 'email' },
-        { name: 'password', label: 'סיסמה (8 תווים לפחות)', type: 'password', minLength: 8 },
+        { name: 'name', label: 'שם מלא', type: 'text', autoComplete: 'name' },
+        { name: 'email', label: 'אימייל', type: 'email', autoComplete: 'email' },
+        { name: 'password', label: 'סיסמה (8 תווים לפחות)', type: 'password', minLength: 8, autoComplete: 'new-password' },
       ]}
       footer={
         <>
