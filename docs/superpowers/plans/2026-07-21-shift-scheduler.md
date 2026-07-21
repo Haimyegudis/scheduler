@@ -4050,6 +4050,71 @@ git commit -m "feat: bilingual UI - Hebrew/English with RTL/LTR switching"
 
 ---
 
+### Task 18: Named stations, cell notes, experimenter slot
+
+**Decisions (user-approved):** global station list managed by admin (add/rename/deactivate, ordered); experimenter is free text per cell; a cell can hold a note and/or experimenter even without a technician.
+
+**Schema (breaking; prod DB is empty — new DDL will be run manually in Neon):**
+```prisma
+model Station {
+  id          Int          @id @default(autoincrement())
+  name        String
+  position    Int
+  active      Boolean      @default(true)
+  assignments Assignment[]
+}
+
+model Assignment {
+  id           Int         @id @default(autoincrement())
+  scheduleId   Int
+  schedule     Schedule    @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  date         String
+  shift        String
+  stationId    Int
+  station      Station     @relation(fields: [stationId], references: [id])
+  technicianId Int?
+  technician   Technician? @relation(fields: [technicianId], references: [id], onDelete: Cascade)
+  experimenter String?
+  note         String?
+
+  @@unique([scheduleId, date, shift, stationId])
+}
+```
+
+**Behavior:**
+- `generateAssignments(dates, techs, stationIds)` — stations param replaces the fixed 1-4; fills each active station per shift, same rules/balancing. Emits `{date, shift, stationId, technicianId}`.
+- `GET/POST/PUT/DELETE /api/admin/stations` — list (ordered by position; include inactive with flag), create {name}, update {id, name?, active?, position?}, delete only if never referenced by an assignment else deactivate (or simply: PUT with active:false; DELETE returns 409 if referenced). Admin only, Hebrew errors.
+- Schedule GET/PUT payloads: cells keyed by stationId; each assignment row may carry technicianId (nullable), experimenter, note. Manual save accepts rows with technicianId null when experimenter or note present; hard-block (off/absent) applies only when technicianId set.
+- Board UI: per cell — technician select + experimenter text input + note text input (compact; the Task 20 redesign will restyle). Stations management panel on the board page (collapsible): list stations with rename inline, add, deactivate/activate; order by position.
+- Technician published view (ScheduleTable): station rows use station names; show experimenter (labeled) and note under the technician name when present; cell with no technician AND no experimenter → light red background with NO text.
+- Reports: by-machine mode uses the station list (names); vacation summary unchanged.
+- Overview unchanged.
+- Update all affected tests (scheduler stations param, admin routes stationId payloads, new stations CRUD tests, reports).
+- If no active stations exist, board shows a hint to add stations; generate produces nothing.
+
+Steps: TDD where logic changes (scheduler, routes); full suite + build green; commit.
+
+---
+
+### Task 19: Multi-select constraints UI, English default, empty-cell styling
+
+- Constraints screen: per-day toggle buttons **Morning / Evening / Off** (multi-select behavior): Morning only → 'morning'; Evening only → 'evening'; both → 'flex'; Off exclusive → 'off'; clearing all → delete/no constraint (treat as not filled — PUT stays per-day single value; compute value client-side). Show existing values mapped back (flex → both toggles on).
+- Default language becomes **English**: layout `getLang` fallback 'en'; everything else already works. RTL only when cookie says 'he'.
+- Published/technician ScheduleTable + admin board: empty cell (no technician, no experimenter) renders empty with light red background — no "ריק"/"—" text (board's select keeps an empty option for clearing but styled as blank).
+- Update tests if any assert Hebrew default; full suite + build green; commit.
+
+---
+
+### Task 20: Modern UI redesign (frontend-design)
+
+- Invoke the frontend-design skill FIRST and follow it.
+- Full visual overhaul of every screen: cohesive design system on the HP Indigo cyan brand (#0aa8dc family), modern typography, cards/tables with depth and hover states, better spacing/hierarchy, polished buttons/inputs/selects, smooth transitions, refined mobile layouts, distinctive login screen. Dark-mode NOT required.
+- Zero logic changes: only className/markup/CSS (globals.css, tailwind utilities, small presentational components allowed).
+- Both languages and both directions (RTL/LTR) must look right.
+- Full suite + build green; commit.
+
+---
+
 ### Task 17: Deploy to Vercel + Neon (guided, interactive)
 
 **Files:**
