@@ -4132,6 +4132,18 @@ Steps: TDD where logic changes (scheduler, routes); full suite + build green; co
 
 ---
 
+### Task 23: Android TWA app (Bubblewrap, WorkDiary recipe)
+
+Prereq: Task 22's PWA live in production. Follow C:\APPS\WorkDiary\android-twa\README.md verbatim — the toolchain (JDK 17, Android SDK, bubblewrap config at %USERPROFILE%\.bubblewrap) is already installed on this machine.
+
+- Task 22 must also serve: `public/manifest.webmanifest`-compatible manifest (or manifest.json — match what the TWA points to), a 512×512 icon (`public/pwa-512.png`, generated from logo.png), and `public/.well-known/assetlinks.json` (cert SHA-256 filled in during this task).
+- Create `android-twa/` in this repo: `twa-manifest.json` — packageId `com.hpindigo.scheduler`, host `scheduler-theta-seven.vercel.app`, name "HP Indigo Scheduler" / launcherName "Scheduler", themeColor HP cyan `#0aa8dc`, enableNotifications true, portrait, signingKey path `C:\APPS\keys\scheduler-twa.keystore` (alias `scheduler`).
+- Generate a NEW keystore (`keytool`), save credentials to `C:\APPS\keys\scheduler-twa-credentials.txt` (NOT in repo), extract cert SHA-256 → put into `public/.well-known/assetlinks.json` → deploy site first, then build.
+- Build per WorkDiary README incl. its two gotchas (jcenter→mavenCentral, PATH for gradlew) → deliverable `app-release-signed.apk` for sideload; write an android-twa/README.md adapted from WorkDiary's.
+- Add a repo docs note: rebuild only on identity change; site deploys update the app automatically.
+
+---
+
 ### Task 20: Modern UI redesign (frontend-design)
 
 - Invoke the frontend-design skill FIRST and follow it.
