@@ -18,7 +18,10 @@ export async function POST(req: Request) {
   const endpoint = typeof body.endpoint === 'string' ? body.endpoint : '';
   const p256dh = typeof body.keys?.p256dh === 'string' ? body.keys.p256dh : '';
   const auth = typeof body.keys?.auth === 'string' ? body.keys.auth : '';
-  if (!endpoint || !p256dh || !auth) {
+  const validEndpoint = endpoint.startsWith('https://') && endpoint.length <= 2048;
+  const validP256dh = p256dh.length > 0 && p256dh.length <= 512;
+  const validAuth = auth.length > 0 && auth.length <= 512;
+  if (!validEndpoint || !validP256dh || !validAuth) {
     return Response.json({ error: 'נתוני מנוי לא תקינים' }, { status: 400 });
   }
 

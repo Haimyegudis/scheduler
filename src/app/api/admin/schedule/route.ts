@@ -45,6 +45,17 @@ export async function PUT(req: Request) {
   const validDates = new Set(weekDates(weekStart, includeFriday));
   assignments = assignments.filter(a => validDates.has(a.date));
 
+  const stationIds = [...new Set(assignments.map(a => a.stationId))];
+  if (stationIds.length > 0) {
+    const existingStations = await prisma.station.findMany({
+      where: { id: { in: stationIds } },
+      select: { id: true },
+    });
+    if (existingStations.length !== stationIds.length) {
+      return Response.json({ error: 'נתוני שיבוץ לא תקינים' }, { status: 400 });
+    }
+  }
+
   const assignedRows = assignments.filter((a): a is typeof a & { technicianId: number } => a.technicianId !== null);
   if (assignedRows.length > 0) {
     const assignDates = [...new Set(assignedRows.map(a => a.date))].sort();
@@ -78,7 +89,16 @@ export async function PUT(req: Request) {
   await prisma.$transaction([
     prisma.assignment.deleteMany({ where: { scheduleId: schedule.id } }),
     prisma.assignment.createMany({
-      data: assignments.map(a => ({ scheduleId: schedule.id, ...a })),
+      data: assignments.map(a => ({
+        scheduleId: schedule.id,
+        date: a.date,
+        shift: a.shift,
+        stationId: a.stationId,
+        technicianId: a.technicianId,
+        experimenter: a.experimenter,
+        note: a.note,
+        color: a.color,
+      })),
     }),
   ]);
   return Response.json({ ok: true });

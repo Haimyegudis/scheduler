@@ -333,3 +333,41 @@ test('save schedule rejects a color that is not a known preset token', async () 
   }));
   expect(res.status).toBe(400);
 });
+
+test('save schedule rejects an assignment referencing a station that does not exist', async () => {
+  const res = await saveSchedule(await adminReq('PUT', '/x', {
+    weekStart: WEEK,
+    includeFriday: false,
+    assignments: [{ date: DATES[0], shift: 'morning', stationId: 999999, technicianId: techIds[0] }],
+  }));
+  expect(res.status).toBe(400);
+  const schedule = await prisma.schedule.findUnique({ where: { weekStart: WEEK } });
+  expect(schedule).toBeNull();
+});
+
+test('save schedule strips unknown keys from assignment rows before writing', async () => {
+  const res = await saveSchedule(await adminReq('PUT', '/x', {
+    weekStart: WEEK,
+    includeFriday: false,
+    assignments: [
+      {
+        date: DATES[0],
+        shift: 'morning',
+        stationId: stationIds[0],
+        technicianId: techIds[0],
+        id: 999999,
+        scheduleId: 999999,
+        evil: 'DROP TABLE',
+      },
+    ],
+  }));
+  expect(res.status).toBe(200);
+  const schedule = await prisma.schedule.findUnique({ where: { weekStart: WEEK }, include: { assignments: true } });
+  expect(schedule!.assignments).toHaveLength(1);
+  const row = schedule!.assignments[0] as unknown as Record<string, unknown>;
+  expect(row.stationId).toBe(stationIds[0]);
+  expect(row.technicianId).toBe(techIds[0]);
+  expect(row.id).not.toBe(999999);
+  expect(row.scheduleId).toBe(schedule!.id);
+  expect(row.evil).toBeUndefined();
+});

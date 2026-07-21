@@ -104,6 +104,28 @@ test('subscribe: rejects malformed subscription payloads', async () => {
   ).toBe(400);
 });
 
+test('subscribe: rejects a non-https endpoint and oversized fields', async () => {
+  setVapidEnv();
+  expect(
+    (
+      await subscribe(
+        await techReq('POST', techId, { endpoint: 'http://push.example/1', keys: { p256dh: 'a', auth: 'b' } })
+      )
+    ).status
+  ).toBe(400);
+  expect(
+    (
+      await subscribe(
+        await techReq('POST', techId, {
+          endpoint: 'https://push.example/1',
+          keys: { p256dh: 'a'.repeat(513), auth: 'b' },
+        })
+      )
+    ).status
+  ).toBe(400);
+  expect(await prisma.pushSubscription.count()).toBe(0);
+});
+
 test('subscribe: creates a subscription row for the session user', async () => {
   setVapidEnv();
   const res = await subscribe(

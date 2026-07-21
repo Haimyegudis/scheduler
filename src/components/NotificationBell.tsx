@@ -22,20 +22,37 @@ function pushSupported(): boolean {
 }
 
 // Small bell button that requests notification permission and registers a
-// push subscription. Hidden once permission has already been granted, or in
-// browsers that don't support push.
+// push subscription. Visibility is driven by whether an active push
+// subscription already exists (not just by Notification.permission), so a
+// user who granted permission but never actually subscribed (or who
+// unsubscribed elsewhere) still sees the bell. Hidden in browsers that don't
+// support push, once a live subscription exists, or once permission has been
+// explicitly denied.
 export default function NotificationBell() {
   const { t } = useT();
   const [supported, setSupported] = useState(false);
   const [permission, setPermission] = useState<NotificationPermission>('default');
+  const [hasSubscription, setHasSubscription] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+
+  const refreshSubscriptionState = useCallback(async () => {
+    if (!pushSupported()) return;
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+      setHasSubscription(!!subscription);
+    } catch {
+      setHasSubscription(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (!pushSupported()) return;
     setSupported(true);
     setPermission(Notification.permission);
-  }, []);
+    void refreshSubscriptionState();
+  }, [refreshSubscriptionState]);
 
   const enable = useCallback(async () => {
     setBusy(true);
@@ -69,10 +86,13 @@ export default function NotificationBell() {
       setError(t('notificationsSetupFailed'));
     } finally {
       setBusy(false);
+      await refreshSubscriptionState();
     }
-  }, [t]);
+  }, [t, refreshSubscriptionState]);
 
-  if (!supported || permission === 'granted') return null;
+  // hasSubscription === null means the check hasn't resolved yet; stay
+  // hidden until we know for sure to avoid a flash of the bell.
+  if (!supported || permission === 'denied' || hasSubscription !== false) return null;
 
   return (
     <span className="flex items-center gap-1.5">

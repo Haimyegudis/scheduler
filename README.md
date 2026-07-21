@@ -75,8 +75,8 @@ bar will simply fail to enable notifications — the rest of the app is unaffect
 node scripts/gen-pwa-icons.js
 ```
 
-`public/.well-known/assetlinks.json` is a placeholder (`[]`) for the Android TWA wrapper (Task 23), which fills
-in the real package/fingerprint entry.
+`public/.well-known/assetlinks.json` contains the real package name and SHA-256 signing fingerprint for the
+Android TWA wrapper (Task 23), enabling Digital Asset Links verification for the app.
 
 ## Database provider: SQLite (dev) vs Postgres (production)
 
