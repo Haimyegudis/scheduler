@@ -1,11 +1,8 @@
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { emptyAbsenceCounts, addAbsenceToCounts, totalOf } from '@/lib/vacationDays';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-function daysBetweenInclusive(a: string, b: string): number {
-  return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86400000) + 1;
-}
 
 export async function GET(req: Request) {
   const session = await getSession(req);
@@ -31,13 +28,10 @@ export async function GET(req: Request) {
   });
 
   const summary = technicians.map(t => {
-    const counts = { vacation: 0, sick: 0, miluim: 0, other: 0 };
+    const counts = emptyAbsenceCounts();
     for (const a of absences) {
       if (a.technicianId !== t.id) continue;
-      const start = a.startDate > from ? a.startDate : from;
-      const end = a.endDate < to ? a.endDate : to;
-      const key = (a.type in counts ? a.type : 'other') as keyof typeof counts;
-      counts[key] += daysBetweenInclusive(start, end);
+      addAbsenceToCounts(counts, a, from, to);
     }
     const offMarked = offRows.filter(r => r.technicianId === t.id).length;
     return {
@@ -45,7 +39,7 @@ export async function GET(req: Request) {
       name: t.name,
       ...counts,
       offMarked,
-      total: counts.vacation + counts.sick + counts.miluim + counts.other,
+      total: totalOf(counts),
     };
   });
 

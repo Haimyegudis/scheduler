@@ -16,6 +16,7 @@ export default function ConstraintsClient({ name }: { name: string }) {
   const TECH_LINKS = [
     { href: '/constraints', label: t('myConstraintsNav') },
     { href: '/schedule', label: t('scheduleNav') },
+    { href: '/vacations', label: t('myVacationsNav') },
   ];
   const [weekStart, setWeekStart] = useState(getCurrentWeekStart());
   const [constraints, setConstraints] = useState<Record<string, string>>({});

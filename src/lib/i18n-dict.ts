@@ -15,6 +15,7 @@ const he = {
   absencesNav: 'היעדרויות',
   reportsNav: 'דוחות',
   adminName: 'מנהל',
+  myVacationsNav: 'החופשים שלי',
 
   loginTitle: 'התחברות',
   registerTitle: 'הרשמה',
@@ -178,6 +179,7 @@ const en: Record<keyof typeof he, string> = {
   absencesNav: 'Absences',
   reportsNav: 'Reports',
   adminName: 'Admin',
+  myVacationsNav: 'My Vacations',
 
   loginTitle: 'Log In',
   registerTitle: 'Register',
