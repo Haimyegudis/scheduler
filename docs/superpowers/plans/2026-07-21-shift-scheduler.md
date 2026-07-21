@@ -4101,6 +4101,7 @@ Steps: TDD where logic changes (scheduler, routes); full suite + build green; co
 - Constraints screen: per-day toggle buttons **Morning / Evening / Off** (multi-select behavior): Morning only → 'morning'; Evening only → 'evening'; both → 'flex'; Off exclusive → 'off'; clearing all → delete/no constraint (treat as not filled — PUT stays per-day single value; compute value client-side). Show existing values mapped back (flex → both toggles on).
 - Default language becomes **English**: layout `getLang` fallback 'en'; everything else already works. RTL only when cookie says 'he'.
 - Published/technician ScheduleTable + admin board: empty cell (no technician, no experimenter) renders empty with light red background — no "ריק"/"—" text (board's select keeps an empty option for clearing but styled as blank).
+- Board dropdown availability indication: each selectable technician's option text shows their request for that day — "Name · בוקר/ערב/בוקר+ערב" (i18n: Morning/Evening/Both); unfilled shows "Name · ?"; options ordered: exact-shift match first, then flex (both), then unfilled/mismatch. Off/absent remain excluded (hard block, unchanged).
 - Update tests if any assert Hebrew default; full suite + build green; commit.
 
 ---
