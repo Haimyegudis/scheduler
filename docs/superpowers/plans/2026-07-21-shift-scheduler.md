@@ -3473,13 +3473,15 @@ git commit -m "feat: admin-entered absences (vacation/sick/miluim) override cons
 ### Task 15: Reports (per-worker / per-machine, published schedules)
 
 **Files:**
-- Create: `src/app/api/admin/reports/route.ts`, `src/app/admin/reports/page.tsx`, `src/app/admin/reports/AdminReportsClient.tsx`
+- Create: `src/app/api/admin/reports/route.ts`, `src/app/api/admin/vacation-summary/route.ts`, `src/app/admin/reports/page.tsx`, `src/app/admin/reports/AdminReportsClient.tsx`
 - Modify: `ADMIN_LINKS` in `src/app/admin/AdminDashboardClient.tsx`, `src/app/admin/schedule/AdminScheduleClient.tsx`, `src/app/admin/users/AdminUsersClient.tsx`, `src/app/admin/absences/AdminAbsencesClient.tsx` (add 5th link `{ href: '/admin/reports', label: 'דוחות' }`)
 - Test: `tests/reports-routes.test.ts`
 
 **Interfaces:**
-- Consumes: prisma, getSession, dayName/formatDate, SHIFT_LABELS, `/api/admin/users` (worker dropdown source).
-- Produces: `GET /api/admin/reports?from=YYYY-MM-DD&to=YYYY-MM-DD` (admin only) → `{ assignments: Array<{date, shift, station, technicianId, technicianName}> }` — only from schedules with status `published`, ordered by date/shift/station.
+- Consumes: prisma, getSession, dayName/formatDate, SHIFT_LABELS, ABSENCE_LABELS, `/api/admin/users` (worker dropdown source), `/api/admin/absences` (vacation detail rows).
+- Produces:
+  - `GET /api/admin/reports?from=YYYY-MM-DD&to=YYYY-MM-DD` (admin only) → `{ assignments: Array<{date, shift, station, technicianId, technicianName}> }` — only from schedules with status `published`, ordered by date/shift/station.
+  - `GET /api/admin/vacation-summary?from=&to=` (admin only) → `{ summary: Array<{technicianId, name, vacation, sick, miluim, other, offMarked, total}> }` — absence days per type clipped to the range (inclusive), `offMarked` = count of Constraint rows with value 'off' in range, `total` = vacation+sick+miluim+other. All non-admin technicians included, even with zero days.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -3544,6 +3546,39 @@ test('rejects non-admin with 403', async () => {
   }));
   expect(res.status).toBe(403);
 });
+
+test('vacation summary counts absence days clipped to range plus off-marked days', async () => {
+  // 3-day vacation fully inside range, sick range extends past the end (clip to 2 days), 2 off days
+  await prisma.absence.create({
+    data: { technicianId: techId, startDate: '2026-07-06', endDate: '2026-07-08', type: 'vacation' },
+  });
+  await prisma.absence.create({
+    data: { technicianId: techId, startDate: '2026-07-30', endDate: '2026-08-05', type: 'sick' },
+  });
+  await prisma.constraint.createMany({
+    data: [
+      { technicianId: techId, date: '2026-07-12', value: 'off' },
+      { technicianId: techId, date: '2026-07-13', value: 'off' },
+      { technicianId: techId, date: '2026-07-14', value: 'morning' },
+    ],
+  });
+  const res = await getVacationSummary(await adminReq('/x?from=2026-07-01&to=2026-07-31'));
+  expect(res.status).toBe(200);
+  const row = (await res.json()).summary.find((s: { technicianId: number }) => s.technicianId === techId);
+  expect(row).toMatchObject({ vacation: 3, sick: 2, miluim: 0, other: 0, offMarked: 2, total: 5 });
+});
+
+test('vacation summary rejects non-admin and bad range', async () => {
+  const token = await createSessionToken({ userId: techId, role: 'technician', name: 'רון' });
+  expect((await getVacationSummary(new Request('http://test/x?from=2026-01-01&to=2026-12-31', {
+    headers: { cookie: `session=${token}` },
+  }))).status).toBe(403);
+  expect((await getVacationSummary(await adminReq('/x?from=2026-12-31&to=2026-01-01'))).status).toBe(400);
+});
+```
+Add to the test file's imports:
+```ts
+import { GET as getVacationSummary } from '@/app/api/admin/vacation-summary/route';
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -3585,9 +3620,66 @@ export async function GET(req: Request) {
 }
 ```
 
+`src/app/api/admin/vacation-summary/route.ts`:
+```ts
+import { prisma } from '@/lib/db';
+import { getSession } from '@/lib/auth';
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function daysBetweenInclusive(a: string, b: string): number {
+  return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86400000) + 1;
+}
+
+export async function GET(req: Request) {
+  const session = await getSession(req);
+  if (session?.role !== 'admin') return Response.json({ error: 'אין הרשאה' }, { status: 403 });
+  const params = new URL(req.url).searchParams;
+  const from = params.get('from') ?? '';
+  const to = params.get('to') ?? '';
+  if (!DATE_RE.test(from) || !DATE_RE.test(to) || from > to) {
+    return Response.json({ error: 'טווח תאריכים לא תקין' }, { status: 400 });
+  }
+
+  const technicians = await prisma.technician.findMany({
+    where: { isAdmin: false },
+    select: { id: true, name: true },
+    orderBy: { name: 'asc' },
+  });
+  const absences = await prisma.absence.findMany({
+    where: { startDate: { lte: to }, endDate: { gte: from } },
+  });
+  const offRows = await prisma.constraint.findMany({
+    where: { value: 'off', date: { gte: from, lte: to } },
+    select: { technicianId: true },
+  });
+
+  const summary = technicians.map(t => {
+    const counts = { vacation: 0, sick: 0, miluim: 0, other: 0 };
+    for (const a of absences) {
+      if (a.technicianId !== t.id) continue;
+      const start = a.startDate > from ? a.startDate : from;
+      const end = a.endDate < to ? a.endDate : to;
+      const key = (a.type in counts ? a.type : 'other') as keyof typeof counts;
+      counts[key] += daysBetweenInclusive(start, end);
+    }
+    const offMarked = offRows.filter(r => r.technicianId === t.id).length;
+    return {
+      technicianId: t.id,
+      name: t.name,
+      ...counts,
+      offMarked,
+      total: counts.vacation + counts.sick + counts.miluim + counts.other,
+    };
+  });
+
+  return Response.json({ summary });
+}
+```
+
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `npx vitest run tests/reports-routes.test.ts` → 4 passed. Then `npm test` → all passing.
+Run: `npx vitest run tests/reports-routes.test.ts` → 6 passed. Then `npm test` → all passing.
 
 - [ ] **Step 5: Reports page**
 
@@ -3785,6 +3877,132 @@ export default function AdminReportsClient() {
   );
 }
 ```
+
+- [ ] **Step 5b: Extend the reports client with the "סיכום חופשים" mode**
+
+Modify `src/app/admin/reports/AdminReportsClient.tsx` (the file created in Step 5):
+
+1. Type + state additions:
+```ts
+interface SummaryRow {
+  technicianId: number;
+  name: string;
+  vacation: number;
+  sick: number;
+  miluim: number;
+  other: number;
+  offMarked: number;
+  total: number;
+}
+interface AbsenceRow {
+  id: number;
+  technicianId: number;
+  technicianName: string;
+  startDate: string;
+  endDate: string;
+  type: string;
+}
+```
+```ts
+  const [year, setYear] = useState(String(new Date().getFullYear()));
+  const [summary, setSummary] = useState<SummaryRow[]>([]);
+  const [absenceRows, setAbsenceRows] = useState<AbsenceRow[]>([]);
+```
+Change the mode state type to `'worker' | 'machine' | 'vacations'`.
+
+2. Import `ABSENCE_LABELS` from `@/lib/labels`.
+
+3. Load summary when in vacations mode:
+```ts
+  useEffect(() => {
+    if (mode !== 'vacations') return;
+    (async () => {
+      setLoading(true);
+      try {
+        const [sumRes, absRes] = await Promise.all([
+          fetch(`/api/admin/vacation-summary?from=${year}-01-01&to=${year}-12-31`),
+          fetch('/api/admin/absences'),
+        ]);
+        setSummary(sumRes.ok ? (await sumRes.json()).summary : []);
+        setAbsenceRows(absRes.ok ? (await absRes.json()).absences : []);
+      } catch {
+        setSummary([]);
+        setAbsenceRows([]);
+      }
+      setLoading(false);
+    })();
+  }, [mode, year]);
+```
+
+4. Mode select gains `<option value="vacations">סיכום חופשים</option>`. When `mode === 'vacations'`, render a year picker instead of the month picker:
+```tsx
+            <label className="block text-sm">
+              שנה
+              <select
+                value={year}
+                onChange={e => setYear(e.target.value)}
+                className="block mt-1 border rounded px-2 py-1.5"
+              >
+                {Array.from({ length: 5 }, (_, i) => String(new Date().getFullYear() - 2 + i)).map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </label>
+```
+(the worker/machine selectors are hidden in this mode; the optional worker select MAY be shown to filter the detail list, see 5)
+
+5. Vacations-mode rendering (replaces the assignments table when `mode === 'vacations'`):
+```tsx
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full bg-white rounded-lg shadow-sm text-sm border-collapse">
+                <thead>
+                  <tr>
+                    <th className="border p-2 bg-gray-100 text-start">עובד</th>
+                    <th className="border p-2 bg-gray-100">חופשה</th>
+                    <th className="border p-2 bg-gray-100">מחלה</th>
+                    <th className="border p-2 bg-gray-100">מילואים</th>
+                    <th className="border p-2 bg-gray-100">אחר</th>
+                    <th className="border p-2 bg-gray-100">סימן חופש</th>
+                    <th className="border p-2 bg-gray-100">סה"כ היעדרות</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {summary.map(s => (
+                    <tr key={s.technicianId}>
+                      <td className="border p-2 font-semibold">{s.name}</td>
+                      <td className="border p-2 text-center">{s.vacation}</td>
+                      <td className="border p-2 text-center">{s.sick}</td>
+                      <td className="border p-2 text-center">{s.miluim}</td>
+                      <td className="border p-2 text-center">{s.other}</td>
+                      <td className="border p-2 text-center">{s.offMarked}</td>
+                      <td className="border p-2 text-center font-bold">{s.total}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <h3 className="font-bold mt-4 mb-2">פירוט היעדרויות ({year})</h3>
+            {absenceRows.filter(a => a.startDate.startsWith(year) || a.endDate.startsWith(year)).length === 0 ? (
+              <p className="text-gray-500 text-sm">אין היעדרויות בשנה זו.</p>
+            ) : (
+              <ul className="bg-white rounded-lg shadow-sm divide-y text-sm">
+                {absenceRows
+                  .filter(a => a.startDate.startsWith(year) || a.endDate.startsWith(year))
+                  .map(a => (
+                    <li key={a.id} className="px-3 py-2 flex flex-wrap gap-2">
+                      <span className="font-semibold">{a.technicianName}</span>
+                      <span>{ABSENCE_LABELS[a.type]}</span>
+                      <span className="text-gray-500">
+                        {formatDate(a.startDate)} – {formatDate(a.endDate)}
+                      </span>
+                    </li>
+                  ))}
+              </ul>
+            )}
+          </>
+```
+The `mode === 'worker' && !workerId` empty-state guard must apply only to worker mode (not vacations).
 
 - [ ] **Step 6: Add the 5th nav link**
 
