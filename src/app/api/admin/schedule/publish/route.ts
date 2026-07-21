@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { weekStartOf } from '@/lib/dates';
+import { sendPushToAll } from '@/lib/push';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -16,5 +17,16 @@ export async function POST(req: Request) {
   const schedule = await prisma.schedule.findUnique({ where: { weekStart } });
   if (!schedule) return Response.json({ error: 'אין תוכנית לשבוע זה' }, { status: 404 });
   await prisma.schedule.update({ where: { id: schedule.id }, data: { status: 'published' } });
+
+  // Publishing must succeed regardless of push delivery outcome.
+  try {
+    await sendPushToAll({
+      title: 'HP Indigo Scheduler',
+      body: 'פורסמה תוכנית משמרות חדשה / New shift schedule published',
+    });
+  } catch {
+    // sendPushToAll already swallows its own errors; this is defense-in-depth.
+  }
+
   return Response.json({ ok: true });
 }

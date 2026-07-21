@@ -3,6 +3,7 @@
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useT, LangToggle } from '@/lib/i18n';
+import NotificationBell from '@/components/NotificationBell';
 
 export default function NavBar({
   name,
@@ -39,6 +40,7 @@ export default function NavBar({
         ))}
       </nav>
       <div className="ms-auto flex items-center gap-3 text-sm">
+        <NotificationBell />
         <span className="text-gray-500">{t('hello')} {name}</span>
         <button onClick={logout} className="text-red-600 hover:underline">{t('logout')}</button>
         <LangToggle />

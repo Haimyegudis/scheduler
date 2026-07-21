@@ -163,6 +163,9 @@ const he = {
   copyScheduleBtn: 'העתק תוכנית',
   copyScheduleSuccessMsg: 'התוכנית הועתקה — ניתן להדביק ב-Outlook',
   copyScheduleFailedMsg: 'ההעתקה נכשלה',
+
+  enableNotificationsBtn: 'הפעל התראות',
+  notificationsSetupFailed: 'הפעלת ההתראות נכשלה',
 } as const;
 
 const en: Record<keyof typeof he, string> = {
@@ -327,6 +330,9 @@ const en: Record<keyof typeof he, string> = {
   copyScheduleBtn: 'Copy schedule',
   copyScheduleSuccessMsg: 'Schedule copied — you can paste it into Outlook',
   copyScheduleFailedMsg: 'Copy failed',
+
+  enableNotificationsBtn: 'Enable notifications',
+  notificationsSetupFailed: 'Failed to enable notifications',
 };
 
 export const dict = { he, en };
@@ -360,6 +366,8 @@ const apiErrorMap: Record<string, string> = {
   'נא להזין שם עמדה': 'Please enter a station name',
   'עמדה לא נמצאה': 'Station not found',
   'לא ניתן למחוק עמדה שמשובצת בתוכנית — ניתן להשבית אותה': 'Cannot delete a station that is used in a schedule — deactivate it instead',
+  'שירות ההתראות אינו מוגדר בשרת': 'The notification service is not configured on the server',
+  'נתוני מנוי לא תקינים': 'Invalid subscription data',
 };
 
 // Non-hook translator for use in server components (e.g. generateMetadata).

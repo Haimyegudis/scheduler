@@ -81,6 +81,18 @@ CREATE TABLE "Absence" (
     CONSTRAINT "Absence_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "PushSubscription" (
+    "id" SERIAL NOT NULL,
+    "technicianId" INTEGER NOT NULL,
+    "endpoint" TEXT NOT NULL,
+    "p256dh" TEXT NOT NULL,
+    "auth" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "PushSubscription_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "Technician_email_key" ON "Technician"("email");
 
@@ -96,6 +108,9 @@ CREATE UNIQUE INDEX "Schedule_weekStart_key" ON "Schedule"("weekStart");
 -- CreateIndex
 CREATE UNIQUE INDEX "Assignment_scheduleId_date_shift_stationId_key" ON "Assignment"("scheduleId", "date", "shift", "stationId");
 
+-- CreateIndex
+CREATE UNIQUE INDEX "PushSubscription_endpoint_key" ON "PushSubscription"("endpoint");
+
 -- AddForeignKey
 ALTER TABLE "Constraint" ADD CONSTRAINT "Constraint_technicianId_fkey" FOREIGN KEY ("technicianId") REFERENCES "Technician"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
@@ -110,4 +125,7 @@ ALTER TABLE "Assignment" ADD CONSTRAINT "Assignment_technicianId_fkey" FOREIGN K
 
 -- AddForeignKey
 ALTER TABLE "Absence" ADD CONSTRAINT "Absence_technicianId_fkey" FOREIGN KEY ("technicianId") REFERENCES "Technician"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PushSubscription" ADD CONSTRAINT "PushSubscription_technicianId_fkey" FOREIGN KEY ("technicianId") REFERENCES "Technician"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
