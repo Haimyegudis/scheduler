@@ -22,3 +22,17 @@ export const STATUS_LABELS: Record<string, string> = {
   partial: 'מילא חלקית',
   none: 'לא מילא',
 };
+
+export const ABSENCE_LABELS: Record<string, string> = {
+  vacation: 'חופשה',
+  sick: 'מחלה',
+  miluim: 'מילואים',
+  other: 'אחר',
+};
+
+export const ABSENCE_COLORS: Record<string, string> = {
+  vacation: 'bg-purple-100 text-purple-800',
+  sick: 'bg-rose-100 text-rose-800',
+  miluim: 'bg-teal-100 text-teal-800',
+  other: 'bg-gray-200 text-gray-700',
+};

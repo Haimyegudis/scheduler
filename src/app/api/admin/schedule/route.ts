@@ -26,6 +26,30 @@ export async function PUT(req: Request) {
   );
   if (!valid) return Response.json({ error: 'נתוני שיבוץ לא תקינים' }, { status: 400 });
 
+  if (assignments.length > 0) {
+    const assignDates = [...new Set(assignments.map(a => a.date))].sort();
+    const [offRows, absenceRows] = await Promise.all([
+      prisma.constraint.findMany({ where: { date: { in: assignDates }, value: 'off' } }),
+      prisma.absence.findMany({
+        where: {
+          startDate: { lte: assignDates[assignDates.length - 1] },
+          endDate: { gte: assignDates[0] },
+        },
+      }),
+    ]);
+    const offSet = new Set(offRows.map(c => `${c.technicianId}|${c.date}`));
+    const blocked = assignments.some(
+      a =>
+        offSet.has(`${a.technicianId}|${a.date}`) ||
+        absenceRows.some(
+          ab => ab.technicianId === a.technicianId && ab.startDate <= a.date && a.date <= ab.endDate
+        )
+    );
+    if (blocked) {
+      return Response.json({ error: 'לא ניתן לשבץ עובד ביום חופש או היעדרות' }, { status: 400 });
+    }
+  }
+
   const schedule = await prisma.schedule.upsert({
     where: { weekStart },
     update: { includeFriday },

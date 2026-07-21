@@ -5,12 +5,13 @@ import NavBar from '@/components/NavBar';
 import WeekNav from '@/components/WeekNav';
 import Loading from '@/components/Loading';
 import { getCurrentWeekStart, weekDates, dayName, formatDate } from '@/lib/dates';
-import { SHIFT_LABELS, CONSTRAINT_LABELS } from '@/lib/labels';
+import { SHIFT_LABELS, CONSTRAINT_LABELS, ABSENCE_LABELS } from '@/lib/labels';
 
 const ADMIN_LINKS = [
   { href: '/admin', label: 'לוח בקרה' },
   { href: '/admin/schedule', label: 'תוכנית משמרות' },
   { href: '/admin/users', label: 'ניהול משתמשים' },
+  { href: '/admin/absences', label: 'היעדרויות' },
 ];
 
 const SHIFTS = ['morning', 'evening'] as const;
@@ -28,6 +29,7 @@ export default function AdminScheduleClient() {
   const [cells, setCells] = useState<Record<CellKey, number | ''>>({});
   const [technicians, setTechnicians] = useState<Tech[]>([]);
   const [constraints, setConstraints] = useState<Record<string, Record<string, string>>>({});
+  const [absences, setAbsences] = useState<Record<string, Record<string, string>>>({});
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
 
@@ -44,6 +46,7 @@ export default function AdminScheduleClient() {
         const overview = await overviewRes.json();
         setTechnicians(sched.technicians);
         setConstraints(overview.constraints);
+        setAbsences(overview.absences ?? {});
         setIncludeFriday(sched.schedule?.includeFriday ?? overview.includeFriday ?? false);
         setStatus(sched.schedule?.status ?? null);
         const next: Record<CellKey, number | ''> = {};
@@ -86,6 +89,8 @@ export default function AdminScheduleClient() {
 
   function warningsFor(date: string, shift: string, techId: number | ''): string | null {
     if (techId === '') return null;
+    const abs = absences[String(techId)]?.[date];
+    if (abs) return `נעדר: ${ABSENCE_LABELS[abs]}`;
     const c = constraints[String(techId)]?.[date];
     const okByConstraint = c === shift || c === 'flex';
     const timesToday = assignmentsPayload.filter(a => a.date === date && a.technicianId === techId).length;
@@ -230,7 +235,12 @@ export default function AdminScheduleClient() {
                               >
                                 <option value="">— ריק —</option>
                                 {technicians
-                                  .filter(t => constraints[String(t.id)]?.[date] !== 'off' || t.id === techId)
+                                  .filter(
+                                    t =>
+                                      (constraints[String(t.id)]?.[date] !== 'off' &&
+                                        !absences[String(t.id)]?.[date]) ||
+                                      t.id === techId
+                                  )
                                   .map(t => (
                                     <option key={t.id} value={t.id}>{t.name}</option>
                                   ))}

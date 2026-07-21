@@ -22,9 +22,21 @@ export async function GET(req: Request) {
     (byTech[String(r.technicianId)] ??= {})[r.date] = r.value;
   }
 
+  const absenceRows = await prisma.absence.findMany({
+    where: { startDate: { lte: dates[dates.length - 1] }, endDate: { gte: dates[0] } },
+  });
+  const absByTech: Record<string, Record<string, string>> = {};
+  for (const a of absenceRows) {
+    for (const d of dates) {
+      if (a.startDate <= d && d <= a.endDate) (absByTech[String(a.technicianId)] ??= {})[d] = a.type;
+    }
+  }
+
   return Response.json({
     technicians: technicians.map(t => {
-      const filled = Object.keys(byTech[String(t.id)] ?? {}).length;
+      const filled = dates.filter(
+        d => byTech[String(t.id)]?.[d] || absByTech[String(t.id)]?.[d]
+      ).length;
       return {
         id: t.id,
         name: t.name,
@@ -32,6 +44,7 @@ export async function GET(req: Request) {
       };
     }),
     constraints: byTech,
+    absences: absByTech,
     dates,
     includeFriday: schedule?.includeFriday ?? false,
     scheduleStatus: schedule?.status ?? null,

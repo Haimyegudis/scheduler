@@ -16,6 +16,7 @@ model Technician {
   createdAt    DateTime     @default(now())
   constraints  Constraint[]
   assignments  Assignment[]
+  absences     Absence[]
 }
 
 model AllowedEmail {
@@ -55,4 +56,14 @@ model Assignment {
   technician   Technician @relation(fields: [technicianId], references: [id], onDelete: Cascade)
 
   @@unique([scheduleId, date, shift, station])
+}
+
+model Absence {
+  id           Int        @id @default(autoincrement())
+  technicianId Int
+  technician   Technician @relation(fields: [technicianId], references: [id], onDelete: Cascade)
+  startDate    String
+  endDate      String
+  type         String
+  createdAt    DateTime   @default(now())
 }

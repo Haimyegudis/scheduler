@@ -5,12 +5,13 @@ import NavBar from '@/components/NavBar';
 import WeekNav from '@/components/WeekNav';
 import Loading from '@/components/Loading';
 import { getCurrentWeekStart, dayName, formatDate } from '@/lib/dates';
-import { CONSTRAINT_LABELS, CONSTRAINT_COLORS, STATUS_LABELS } from '@/lib/labels';
+import { CONSTRAINT_LABELS, CONSTRAINT_COLORS, STATUS_LABELS, ABSENCE_LABELS, ABSENCE_COLORS } from '@/lib/labels';
 
 const ADMIN_LINKS = [
   { href: '/admin', label: 'לוח בקרה' },
   { href: '/admin/schedule', label: 'תוכנית משמרות' },
   { href: '/admin/users', label: 'ניהול משתמשים' },
+  { href: '/admin/absences', label: 'היעדרויות' },
 ];
 
 const STATUS_COLORS: Record<string, string> = {
@@ -22,6 +23,7 @@ const STATUS_COLORS: Record<string, string> = {
 interface Overview {
   technicians: Array<{ id: number; name: string; status: string }>;
   constraints: Record<string, Record<string, string>>;
+  absences: Record<string, Record<string, string>>;
   dates: string[];
   scheduleStatus: string | null;
 }
@@ -95,9 +97,14 @@ export default function AdminDashboardClient() {
                         </td>
                         {data.dates.map(date => {
                           const v = data.constraints[String(t.id)]?.[date];
+                          const abs = data.absences[String(t.id)]?.[date];
                           return (
                             <td key={date} className="border p-2 text-center">
-                              {v ? (
+                              {abs ? (
+                                <span className={`px-2 py-0.5 rounded-full text-xs ${ABSENCE_COLORS[abs]}`}>
+                                  {ABSENCE_LABELS[abs]}
+                                </span>
+                              ) : v ? (
                                 <span className={`px-2 py-0.5 rounded-full text-xs ${CONSTRAINT_COLORS[v]}`}>
                                   {CONSTRAINT_LABELS[v]}
                                 </span>

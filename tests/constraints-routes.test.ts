@@ -27,7 +27,7 @@ test('GET returns empty constraints and week flags', async () => {
   const res = await GET(await techRequest('GET', `/api/constraints?weekStart=${WEEK}`, techId));
   expect(res.status).toBe(200);
   const data = await res.json();
-  expect(data).toEqual({ constraints: {}, includeFriday: false, published: false });
+  expect(data).toEqual({ constraints: {}, includeFriday: false, published: false, absences: {} });
 });
 
 test('PUT saves a constraint and GET returns it', async () => {

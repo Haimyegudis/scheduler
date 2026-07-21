@@ -8,6 +8,7 @@ const ADMIN_LINKS = [
   { href: '/admin', label: 'לוח בקרה' },
   { href: '/admin/schedule', label: 'תוכנית משמרות' },
   { href: '/admin/users', label: 'ניהול משתמשים' },
+  { href: '/admin/absences', label: 'היעדרויות' },
 ];
 
 interface AllowedEmail { id: number; email: string }

@@ -19,10 +19,24 @@ export async function GET(req: Request) {
   const rows = await prisma.constraint.findMany({
     where: { technicianId: session.userId, date: { in: dates } },
   });
+  const absenceRows = await prisma.absence.findMany({
+    where: {
+      technicianId: session.userId,
+      startDate: { lte: dates[dates.length - 1] },
+      endDate: { gte: dates[0] },
+    },
+  });
+  const absences: Record<string, string> = {};
+  for (const a of absenceRows) {
+    for (const d of dates) {
+      if (a.startDate <= d && d <= a.endDate) absences[d] = a.type;
+    }
+  }
   return Response.json({
     constraints: Object.fromEntries(rows.map(r => [r.date, r.value])),
     includeFriday: schedule?.includeFriday ?? false,
     published: schedule?.status === 'published',
+    absences,
   });
 }
 
@@ -39,6 +53,12 @@ export async function PUT(req: Request) {
   const schedule = await prisma.schedule.findUnique({ where: { weekStart: weekStartOf(date) } });
   if (schedule?.status === 'published') {
     return Response.json({ error: 'התוכנית לשבוע זה כבר פורסמה — לא ניתן לשנות אילוצים' }, { status: 409 });
+  }
+  const absent = await prisma.absence.findFirst({
+    where: { technicianId: session.userId, startDate: { lte: date }, endDate: { gte: date } },
+  });
+  if (absent) {
+    return Response.json({ error: 'ביום זה מוגדרת היעדרות — פנה למנהל' }, { status: 409 });
   }
   await prisma.constraint.upsert({
     where: { technicianId_date: { technicianId: session.userId!, date } },

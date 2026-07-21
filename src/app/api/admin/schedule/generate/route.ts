@@ -19,6 +19,16 @@ export async function POST(req: Request) {
     if (!constraintsByTech.has(r.technicianId)) constraintsByTech.set(r.technicianId, {});
     constraintsByTech.get(r.technicianId)![r.date] = r.value as ConstraintValue;
   }
+  const absenceRows = await prisma.absence.findMany({
+    where: { startDate: { lte: dates[dates.length - 1] }, endDate: { gte: dates[0] } },
+  });
+  for (const a of absenceRows) {
+    const rec = constraintsByTech.get(a.technicianId);
+    if (!rec) continue;
+    for (const d of dates) {
+      if (a.startDate <= d && d <= a.endDate) delete rec[d];
+    }
+  }
   const assignments = generateAssignments(
     dates,
     technicians.map(t => ({ technicianId: t.id, constraints: constraintsByTech.get(t.id) ?? {} }))
