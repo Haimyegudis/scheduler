@@ -46,3 +46,14 @@ test('createSessionToken throws when JWT_SECRET is missing', async () => {
 test('cookies add Secure flag only in production', () => {
   expect(sessionCookie('abc')).not.toContain('Secure'); // NODE_ENV=test here
 });
+
+test('cookies include Secure flag in production', () => {
+  const saved = process.env.NODE_ENV;
+  (process.env as Record<string, string>).NODE_ENV = 'production';
+  try {
+    expect(sessionCookie('abc')).toContain('; Secure');
+    expect(clearSessionCookie()).toContain('; Secure');
+  } finally {
+    (process.env as Record<string, string>).NODE_ENV = saved!;
+  }
+});
