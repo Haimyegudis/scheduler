@@ -4,3 +4,9 @@ node_modules/
 prisma/*.db
 *.tsbuildinfo
 next-env.d.ts
+
+# Android TWA build outputs (regenerate with `npx @bubblewrap/cli update` + `build`)
+dist-android/
+android-twa/*.apk
+android-twa/*.aab
+android-twa/*.idsig

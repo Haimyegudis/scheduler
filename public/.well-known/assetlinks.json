@@ -1,1 +1,12 @@
-[]
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.hpindigo.scheduler",
+      "sha256_cert_fingerprints": [
+        "FE:C8:B1:FF:79:7D:FB:B2:A6:AA:EA:42:34:19:E6:3E:A6:56:40:2E:3D:A6:C2:89:EB:BB:C4:0C:99:72:C9:79"
+      ]
+    }
+  }
+]
