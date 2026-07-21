@@ -109,6 +109,15 @@ test('save schedule replaces assignments and persists includeFriday', async () =
   expect(schedule!.assignments).toHaveLength(1);
 });
 
+test('save schedule rejects malformed assignment objects with 400', async () => {
+  const res = await saveSchedule(await adminReq('PUT', '/x', {
+    weekStart: WEEK,
+    includeFriday: false,
+    assignments: [{ date: DATES[0], shift: 'night', station: 9, technicianId: 'x' }],
+  }));
+  expect(res.status).toBe(400);
+});
+
 test('technician sees schedule only after publish; admin always', async () => {
   await generate(await adminReq('POST', '/x', { weekStart: WEEK, includeFriday: false }));
 

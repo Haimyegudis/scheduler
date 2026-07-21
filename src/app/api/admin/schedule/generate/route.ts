@@ -29,9 +29,11 @@ export async function POST(req: Request) {
     update: { includeFriday, status: 'draft' },
     create: { weekStart, includeFriday, status: 'draft' },
   });
-  await prisma.assignment.deleteMany({ where: { scheduleId: schedule.id } });
-  await prisma.assignment.createMany({
-    data: assignments.map(a => ({ scheduleId: schedule.id, ...a })),
-  });
+  await prisma.$transaction([
+    prisma.assignment.deleteMany({ where: { scheduleId: schedule.id } }),
+    prisma.assignment.createMany({
+      data: assignments.map(a => ({ scheduleId: schedule.id, ...a })),
+    }),
+  ]);
   return Response.json({ ok: true });
 }
