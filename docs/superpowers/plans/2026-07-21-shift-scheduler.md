@@ -14,7 +14,8 @@
 
 - UI language: Hebrew, `dir="rtl"`, `lang="he"`, responsive for mobile.
 - Password minimum: **8 characters**. No email verification.
-- Admin credentials (server-side check, hardcoded per spec): username `admin`, password `admin123`.
+- **Auth model (updated):** everyone logs in with email+password. NO fixed admin credentials. Registration allowed ONLY for emails in the `AllowedEmail` table OR the bootstrap admin email `gorgani@hp.com` (constant `ADMIN_EMAIL` in `src/lib/config.ts`). Registering with the bootstrap email sets `isAdmin=true`. Emails normalized to lowercase everywhere.
+- Admins are NOT technicians: users with `isAdmin=true` are excluded from all technician lists, constraint tables, and scheduling. Admin may toggle `isAdmin` on other users but never on themselves (400). Role changes take effect at next login (role lives in the JWT).
 - Stations: **1–4** (identical). Shifts: `morning` | `evening`.
 - Constraint values: `morning` | `evening` | `flex` | `off`. Missing constraint = unavailable.
 - Work days: Sunday–Thursday; Friday only when `includeFriday=true` on that week's Schedule. Never Saturday.
@@ -733,19 +734,50 @@ git commit -m "feat: JWT session helpers (cookie-based, jose)"
 
 ---
 
-### Task 5: Auth API routes
+### Task 5: Auth API routes (allowlist model)
 
 **Files:**
-- Create: `src/app/api/auth/register/route.ts`, `src/app/api/auth/login/route.ts`, `src/app/api/auth/admin-login/route.ts`, `src/app/api/auth/logout/route.ts`
+- Modify: `prisma/schema.prisma` (add `isAdmin` to Technician; add `AllowedEmail` model)
+- Create: `src/lib/config.ts`, `src/app/api/auth/register/route.ts`, `src/app/api/auth/login/route.ts`, `src/app/api/auth/logout/route.ts`
 - Test: `tests/auth-routes.test.ts`
 
 **Interfaces:**
 - Consumes: `prisma` (`@/lib/db`), `createSessionToken`/`sessionCookie`/`clearSessionCookie` (`@/lib/auth`).
-- Produces HTTP API:
-  - `POST /api/auth/register` `{name,email,password}` → 200 `{ok:true}` + Set-Cookie | 400 | 409
-  - `POST /api/auth/login` `{email,password}` → 200 + Set-Cookie | 401
-  - `POST /api/auth/admin-login` `{username,password}` → 200 + Set-Cookie | 401
-  - `POST /api/auth/logout` → 200 + expiring Set-Cookie
+- Produces:
+  - `ADMIN_EMAIL` constant from `@/lib/config` (`'gorgani@hp.com'`).
+  - Prisma: `Technician.isAdmin: Boolean @default(false)`; model `AllowedEmail { id, email @unique, createdAt }`.
+  - HTTP API:
+    - `POST /api/auth/register` `{name,email,password}` → 200 `{ok:true, role}` + Set-Cookie | 400 invalid | 403 email not allowed | 409 taken. Bootstrap email → `isAdmin=true`, role `admin`. Emails lowercased.
+    - `POST /api/auth/login` `{email,password}` → 200 `{ok:true, role}` + Set-Cookie | 401. Role = `admin` iff `isAdmin`.
+    - `POST /api/auth/logout` → 200 + expiring Set-Cookie
+
+- [ ] **Step 0: Update Prisma schema and push**
+
+In `prisma/schema.prisma`, change the `Technician` model and add `AllowedEmail`:
+```prisma
+model Technician {
+  id           Int          @id @default(autoincrement())
+  name         String
+  email        String       @unique
+  passwordHash String
+  isAdmin      Boolean      @default(false)
+  createdAt    DateTime     @default(now())
+  constraints  Constraint[]
+  assignments  Assignment[]
+}
+
+model AllowedEmail {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  createdAt DateTime @default(now())
+}
+```
+Run: `npx prisma db push` (with `$env:NODE_OPTIONS='--use-system-ca'`). Expected: schema synced, client regenerated.
+
+`src/lib/config.ts`:
+```ts
+export const ADMIN_EMAIL = 'gorgani@hp.com';
+```
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -754,9 +786,9 @@ git commit -m "feat: JWT session helpers (cookie-based, jose)"
 import { test, expect, beforeEach } from 'vitest';
 import { prisma } from '@/lib/db';
 import { verifySessionToken } from '@/lib/auth';
+import { ADMIN_EMAIL } from '@/lib/config';
 import { POST as register } from '@/app/api/auth/register/route';
 import { POST as login } from '@/app/api/auth/login/route';
-import { POST as adminLogin } from '@/app/api/auth/admin-login/route';
 import { POST as logout } from '@/app/api/auth/logout/route';
 
 function jsonReq(url: string, body: unknown): Request {
@@ -774,44 +806,74 @@ function cookieToken(res: Response): string {
 
 beforeEach(async () => {
   await prisma.technician.deleteMany();
+  await prisma.allowedEmail.deleteMany();
 });
 
-test('register creates technician and sets session cookie', async () => {
-  const res = await register(jsonReq('/api/auth/register', { name: 'דני', email: 'a@b.com', password: 'password1' }));
+test('register rejects an email that is not on the allowlist with 403', async () => {
+  const res = await register(jsonReq('/x', { name: 'דני', email: 'a@b.com', password: 'password1' }));
+  expect(res.status).toBe(403);
+  expect(await prisma.technician.count()).toBe(0);
+});
+
+test('register creates technician for an allowed email and sets session cookie', async () => {
+  await prisma.allowedEmail.create({ data: { email: 'a@b.com' } });
+  const res = await register(jsonReq('/x', { name: 'דני', email: 'a@b.com', password: 'password1' }));
   expect(res.status).toBe(200);
+  expect((await res.json()).role).toBe('technician');
   const session = await verifySessionToken(cookieToken(res));
   expect(session?.role).toBe('technician');
   expect(session?.name).toBe('דני');
   const tech = await prisma.technician.findUnique({ where: { email: 'a@b.com' } });
   expect(tech).not.toBeNull();
+  expect(tech!.isAdmin).toBe(false);
   expect(tech!.passwordHash).not.toBe('password1');
 });
 
+test('bootstrap admin email registers without allowlist entry and becomes admin', async () => {
+  const res = await register(jsonReq('/x', { name: 'גורגני', email: ADMIN_EMAIL, password: 'password1' }));
+  expect(res.status).toBe(200);
+  expect((await res.json()).role).toBe('admin');
+  const session = await verifySessionToken(cookieToken(res));
+  expect(session?.role).toBe('admin');
+  expect(session?.userId).toBeDefined();
+  const admin = await prisma.technician.findUnique({ where: { email: ADMIN_EMAIL } });
+  expect(admin!.isAdmin).toBe(true);
+});
+
+test('emails are normalized to lowercase on register and login', async () => {
+  await prisma.allowedEmail.create({ data: { email: 'a@b.com' } });
+  const res = await register(jsonReq('/x', { name: 'a', email: 'A@B.Com', password: 'password1' }));
+  expect(res.status).toBe(200);
+  expect(await prisma.technician.findUnique({ where: { email: 'a@b.com' } })).not.toBeNull();
+  expect((await login(jsonReq('/x', { email: 'a@B.COM', password: 'password1' }))).status).toBe(200);
+});
+
 test('register rejects short password and missing fields', async () => {
+  await prisma.allowedEmail.create({ data: { email: 'a@b.com' } });
   expect((await register(jsonReq('/x', { name: 'a', email: 'a@b.com', password: 'short' }))).status).toBe(400);
   expect((await register(jsonReq('/x', { email: 'a@b.com', password: 'password1' }))).status).toBe(400);
   expect((await register(new Request('http://test/x', { method: 'POST' }))).status).toBe(400);
 });
 
 test('register rejects duplicate email with 409', async () => {
+  await prisma.allowedEmail.create({ data: { email: 'a@b.com' } });
   await register(jsonReq('/x', { name: 'a', email: 'a@b.com', password: 'password1' }));
   const res = await register(jsonReq('/x', { name: 'b', email: 'a@b.com', password: 'password2' }));
   expect(res.status).toBe(409);
 });
 
-test('login succeeds with correct password, fails otherwise', async () => {
+test('login returns role by isAdmin and fails on bad credentials', async () => {
+  await prisma.allowedEmail.create({ data: { email: 'a@b.com' } });
   await register(jsonReq('/x', { name: 'a', email: 'a@b.com', password: 'password1' }));
-  const ok = await login(jsonReq('/x', { email: 'a@b.com', password: 'password1' }));
-  expect(ok.status).toBe(200);
+  await register(jsonReq('/x', { name: 'ג', email: ADMIN_EMAIL, password: 'password2' }));
+  const techLogin = await login(jsonReq('/x', { email: 'a@b.com', password: 'password1' }));
+  expect(techLogin.status).toBe(200);
+  expect((await techLogin.json()).role).toBe('technician');
+  const adminLogin = await login(jsonReq('/x', { email: ADMIN_EMAIL, password: 'password2' }));
+  expect((await adminLogin.json()).role).toBe('admin');
+  expect((await verifySessionToken(cookieToken(adminLogin)))?.role).toBe('admin');
   expect((await login(jsonReq('/x', { email: 'a@b.com', password: 'wrongpass1' }))).status).toBe(401);
   expect((await login(jsonReq('/x', { email: 'no@b.com', password: 'password1' }))).status).toBe(401);
-});
-
-test('admin login with fixed credentials only', async () => {
-  const ok = await adminLogin(jsonReq('/x', { username: 'admin', password: 'admin123' }));
-  expect(ok.status).toBe(200);
-  expect((await verifySessionToken(cookieToken(ok)))?.role).toBe('admin');
-  expect((await adminLogin(jsonReq('/x', { username: 'admin', password: 'nope' }))).status).toBe(401);
 });
 
 test('logout clears the cookie', async () => {
@@ -825,29 +887,44 @@ test('logout clears the cookie', async () => {
 Run: `npx vitest run tests/auth-routes.test.ts`
 Expected: FAIL — modules not found.
 
-- [ ] **Step 3: Implement the four routes**
+- [ ] **Step 3: Implement the three routes**
 
 `src/app/api/auth/register/route.ts`:
 ```ts
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/db';
 import { createSessionToken, sessionCookie } from '@/lib/auth';
+import { ADMIN_EMAIL } from '@/lib/config';
 
 export async function POST(req: Request) {
-  const body = await req.json().catch(() => ({}));
-  const { name, email, password } = body as { name?: string; email?: string; password?: string };
+  const body = (await req.json().catch(() => ({}))) as {
+    name?: string;
+    email?: string;
+    password?: string;
+  };
+  const name = body.name?.trim();
+  const email = body.email?.trim().toLowerCase();
+  const password = body.password;
   if (!name || !email || !password || password.length < 8) {
     return Response.json({ error: 'נא למלא שם, מייל וסיסמה באורך 8 תווים לפחות' }, { status: 400 });
+  }
+  const isBootstrapAdmin = email === ADMIN_EMAIL;
+  if (!isBootstrapAdmin) {
+    const allowed = await prisma.allowedEmail.findUnique({ where: { email } });
+    if (!allowed) {
+      return Response.json({ error: 'המייל אינו מורשה להרשמה. פנה למנהל.' }, { status: 403 });
+    }
   }
   const existing = await prisma.technician.findUnique({ where: { email } });
   if (existing) {
     return Response.json({ error: 'המייל כבר רשום במערכת' }, { status: 409 });
   }
   const tech = await prisma.technician.create({
-    data: { name, email, passwordHash: await bcrypt.hash(password, 10) },
+    data: { name, email, passwordHash: await bcrypt.hash(password, 10), isAdmin: isBootstrapAdmin },
   });
-  const token = await createSessionToken({ userId: tech.id, role: 'technician', name: tech.name });
-  return Response.json({ ok: true }, { headers: { 'Set-Cookie': sessionCookie(token) } });
+  const role = tech.isAdmin ? 'admin' : 'technician';
+  const token = await createSessionToken({ userId: tech.id, role, name: tech.name });
+  return Response.json({ ok: true, role }, { headers: { 'Set-Cookie': sessionCookie(token) } });
 }
 ```
 
@@ -858,29 +935,16 @@ import { prisma } from '@/lib/db';
 import { createSessionToken, sessionCookie } from '@/lib/auth';
 
 export async function POST(req: Request) {
-  const body = await req.json().catch(() => ({}));
-  const { email, password } = body as { email?: string; password?: string };
+  const body = (await req.json().catch(() => ({}))) as { email?: string; password?: string };
+  const email = body.email?.trim().toLowerCase();
+  const password = body.password;
   const tech = email ? await prisma.technician.findUnique({ where: { email } }) : null;
   if (!tech || !password || !(await bcrypt.compare(password, tech.passwordHash))) {
     return Response.json({ error: 'מייל או סיסמה שגויים' }, { status: 401 });
   }
-  const token = await createSessionToken({ userId: tech.id, role: 'technician', name: tech.name });
-  return Response.json({ ok: true }, { headers: { 'Set-Cookie': sessionCookie(token) } });
-}
-```
-
-`src/app/api/auth/admin-login/route.ts`:
-```ts
-import { createSessionToken, sessionCookie } from '@/lib/auth';
-
-export async function POST(req: Request) {
-  const body = await req.json().catch(() => ({}));
-  const { username, password } = body as { username?: string; password?: string };
-  if (username !== 'admin' || password !== 'admin123') {
-    return Response.json({ error: 'שם משתמש או סיסמה שגויים' }, { status: 401 });
-  }
-  const token = await createSessionToken({ role: 'admin', name: 'מנהל' });
-  return Response.json({ ok: true }, { headers: { 'Set-Cookie': sessionCookie(token) } });
+  const role = tech.isAdmin ? 'admin' : 'technician';
+  const token = await createSessionToken({ userId: tech.id, role, name: tech.name });
+  return Response.json({ ok: true, role }, { headers: { 'Set-Cookie': sessionCookie(token) } });
 }
 ```
 
@@ -896,13 +960,13 @@ export async function POST() {
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `npx vitest run tests/auth-routes.test.ts`
-Expected: 6 passed.
+Expected: 8 passed.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/app/api/auth tests/auth-routes.test.ts
-git commit -m "feat: auth API - register, login, admin login, logout"
+git add prisma/schema.prisma src/lib/config.ts src/app/api/auth tests/auth-routes.test.ts
+git commit -m "feat: auth API - allowlist registration, email login, bootstrap admin"
 ```
 
 ---
@@ -1062,17 +1126,20 @@ git commit -m "feat: constraints API with published-week lock"
 ### Task 7: Schedule + admin API
 
 **Files:**
-- Create: `src/app/api/schedule/route.ts`, `src/app/api/admin/overview/route.ts`, `src/app/api/admin/schedule/route.ts`, `src/app/api/admin/schedule/generate/route.ts`, `src/app/api/admin/schedule/publish/route.ts`
+- Create: `src/app/api/schedule/route.ts`, `src/app/api/admin/overview/route.ts`, `src/app/api/admin/schedule/route.ts`, `src/app/api/admin/schedule/generate/route.ts`, `src/app/api/admin/schedule/publish/route.ts`, `src/app/api/admin/allowed-emails/route.ts`, `src/app/api/admin/users/route.ts`
 - Test: `tests/admin-routes.test.ts`
 
 **Interfaces:**
 - Consumes: `prisma`, `getSession`, `weekDates`, `generateAssignments` (`@/lib/scheduler`).
+- **All technician lists exclude admins** (`where: { isAdmin: false }`): schedule route's technicians array, overview, and generate input.
 - Produces HTTP API:
   - `GET /api/schedule?weekStart=` (any logged-in) → `{ schedule: { status, includeFriday, assignments: Array<{date, shift, station, technicianId}> } | null, technicians: Array<{id, name}> }`. Technician gets `schedule: null` unless published.
   - `GET /api/admin/overview?weekStart=` (admin) → `{ technicians: Array<{id, name, status: 'full'|'partial'|'none'}>, constraints: Record<techId, Record<date, value>>, dates: string[], includeFriday: boolean, scheduleStatus: 'draft'|'published'|null }`
   - `PUT /api/admin/schedule` `{weekStart, includeFriday, assignments: Array<{date, shift, station, technicianId}>}` → upsert schedule + replace assignments (save draft / toggle Friday). Keeps existing status; creates as `draft`.
   - `POST /api/admin/schedule/generate` `{weekStart, includeFriday}` → runs algorithm, replaces assignments, status → `draft`.
   - `POST /api/admin/schedule/publish` `{weekStart}` → status → `published` | 404.
+  - `GET /api/admin/allowed-emails` → `{ emails: Array<{id, email}> }`; `POST` `{email}` → 200 | 400 invalid | 409 duplicate; `DELETE` `{email}` → 200.
+  - `GET /api/admin/users` → `{ users: Array<{id, name, email, isAdmin}> }`; `PUT` `{userId, isAdmin}` → 200 | 400 when `userId === session.userId` (cannot change own admin flag) | 404 unknown user.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1086,12 +1153,14 @@ import { GET as getOverview } from '@/app/api/admin/overview/route';
 import { PUT as saveSchedule } from '@/app/api/admin/schedule/route';
 import { POST as generate } from '@/app/api/admin/schedule/generate/route';
 import { POST as publish } from '@/app/api/admin/schedule/publish/route';
+import { GET as listEmails, POST as addEmail, DELETE as removeEmail } from '@/app/api/admin/allowed-emails/route';
+import { GET as listUsers, PUT as setUserAdmin } from '@/app/api/admin/users/route';
 
 const WEEK = '2026-07-19';
 const DATES = ['2026-07-19', '2026-07-20', '2026-07-21', '2026-07-22', '2026-07-23'];
 
-async function adminReq(method: string, url: string, body?: unknown): Promise<Request> {
-  const token = await createSessionToken({ role: 'admin', name: 'מנהל' });
+async function adminReq(method: string, url: string, body?: unknown, adminUserId = 999): Promise<Request> {
+  const token = await createSessionToken({ userId: adminUserId, role: 'admin', name: 'מנהל' });
   return new Request(`http://test${url}`, {
     method,
     headers: { cookie: `session=${token}`, 'content-type': 'application/json' },
@@ -1204,6 +1273,47 @@ test('technician sees schedule only after publish; admin always', async () => {
 test('publish 404s when no schedule exists', async () => {
   expect((await publish(await adminReq('POST', '/x', { weekStart: '2030-01-06' }))).status).toBe(404);
 });
+
+test('admins are excluded from overview, schedule technicians, and generation', async () => {
+  const admin = await prisma.technician.create({
+    data: { name: 'מנהל', email: 'boss@x.com', passwordHash: 'x', isAdmin: true },
+  });
+  for (const date of DATES) {
+    await prisma.constraint.create({ data: { technicianId: admin.id, date, value: 'flex' } });
+  }
+  const overview = await (await getOverview(await adminReq('GET', `/x?weekStart=${WEEK}`))).json();
+  expect(overview.technicians.find((t: { id: number }) => t.id === admin.id)).toBeUndefined();
+
+  await generate(await adminReq('POST', '/x', { weekStart: WEEK, includeFriday: false }));
+  const assigned = await prisma.assignment.findMany({ where: { technicianId: admin.id } });
+  expect(assigned).toHaveLength(0);
+
+  const sched = await (await getSchedule(await adminReq('GET', `/x?weekStart=${WEEK}`))).json();
+  expect(sched.technicians.find((t: { id: number }) => t.id === admin.id)).toBeUndefined();
+});
+
+test('allowed-emails: add, list, reject duplicate/invalid, remove', async () => {
+  expect((await addEmail(await adminReq('POST', '/x', { email: 'New@X.com' }))).status).toBe(200);
+  expect((await addEmail(await adminReq('POST', '/x', { email: 'new@x.com' }))).status).toBe(409);
+  expect((await addEmail(await adminReq('POST', '/x', { email: 'not-an-email' }))).status).toBe(400);
+  const list = await (await listEmails(await adminReq('GET', '/x'))).json();
+  expect(list.emails.map((e: { email: string }) => e.email)).toEqual(['new@x.com']);
+  expect((await removeEmail(await adminReq('DELETE', '/x', { email: 'new@x.com' }))).status).toBe(200);
+  expect((await (await listEmails(await adminReq('GET', '/x'))).json()).emails).toHaveLength(0);
+});
+
+test('users: list all, toggle admin, refuse self-change', async () => {
+  const me = await prisma.technician.create({
+    data: { name: 'אני', email: 'me@x.com', passwordHash: 'x', isAdmin: true },
+  });
+  const users = await (await listUsers(await adminReq('GET', '/x', undefined, me.id))).json();
+  expect(users.users.length).toBe(11); // 10 technicians + me
+  const target = techIds[0];
+  expect((await setUserAdmin(await adminReq('PUT', '/x', { userId: target, isAdmin: true }, me.id))).status).toBe(200);
+  expect((await prisma.technician.findUnique({ where: { id: target } }))!.isAdmin).toBe(true);
+  expect((await setUserAdmin(await adminReq('PUT', '/x', { userId: me.id, isAdmin: false }, me.id))).status).toBe(400);
+  expect((await setUserAdmin(await adminReq('PUT', '/x', { userId: 123456, isAdmin: true }, me.id))).status).toBe(404);
+});
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -1229,7 +1339,11 @@ export async function GET(req: Request) {
     include: { assignments: { select: { date: true, shift: true, station: true, technicianId: true } } },
   });
   const visible = schedule && (session.role === 'admin' || schedule.status === 'published');
-  const technicians = await prisma.technician.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } });
+  const technicians = await prisma.technician.findMany({
+    where: { isAdmin: false },
+    select: { id: true, name: true },
+    orderBy: { name: 'asc' },
+  });
   return Response.json({
     schedule: visible
       ? { status: schedule.status, includeFriday: schedule.includeFriday, assignments: schedule.assignments }
@@ -1253,7 +1367,11 @@ export async function GET(req: Request) {
 
   const schedule = await prisma.schedule.findUnique({ where: { weekStart } });
   const dates = weekDates(weekStart, schedule?.includeFriday ?? false);
-  const technicians = await prisma.technician.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } });
+  const technicians = await prisma.technician.findMany({
+    where: { isAdmin: false },
+    select: { id: true, name: true },
+    orderBy: { name: 'asc' },
+  });
   const rows = await prisma.constraint.findMany({ where: { date: { in: dates } } });
 
   const byTech: Record<string, Record<string, string>> = {};
@@ -1324,7 +1442,7 @@ export async function POST(req: Request) {
   if (!weekStart) return Response.json({ error: 'שבוע לא תקין' }, { status: 400 });
 
   const dates = weekDates(weekStart, includeFriday);
-  const technicians = await prisma.technician.findMany({ select: { id: true } });
+  const technicians = await prisma.technician.findMany({ where: { isAdmin: false }, select: { id: true } });
   const rows = await prisma.constraint.findMany({ where: { date: { in: dates } } });
 
   const constraintsByTech = new Map<number, Record<string, ConstraintValue>>();
@@ -1369,6 +1487,81 @@ export async function POST(req: Request) {
 }
 ```
 
+`src/app/api/admin/allowed-emails/route.ts`:
+```ts
+import { prisma } from '@/lib/db';
+import { getSession } from '@/lib/auth';
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export async function GET(req: Request) {
+  const session = await getSession(req);
+  if (session?.role !== 'admin') return Response.json({ error: 'אין הרשאה' }, { status: 403 });
+  const emails = await prisma.allowedEmail.findMany({
+    select: { id: true, email: true },
+    orderBy: { email: 'asc' },
+  });
+  return Response.json({ emails });
+}
+
+export async function POST(req: Request) {
+  const session = await getSession(req);
+  if (session?.role !== 'admin') return Response.json({ error: 'אין הרשאה' }, { status: 403 });
+  const body = (await req.json().catch(() => ({}))) as { email?: string };
+  const email = body.email?.trim().toLowerCase();
+  if (!email || !EMAIL_RE.test(email)) {
+    return Response.json({ error: 'כתובת מייל לא תקינה' }, { status: 400 });
+  }
+  const existing = await prisma.allowedEmail.findUnique({ where: { email } });
+  if (existing) return Response.json({ error: 'המייל כבר ברשימה' }, { status: 409 });
+  await prisma.allowedEmail.create({ data: { email } });
+  return Response.json({ ok: true });
+}
+
+export async function DELETE(req: Request) {
+  const session = await getSession(req);
+  if (session?.role !== 'admin') return Response.json({ error: 'אין הרשאה' }, { status: 403 });
+  const body = (await req.json().catch(() => ({}))) as { email?: string };
+  const email = body.email?.trim().toLowerCase();
+  if (!email) return Response.json({ error: 'כתובת מייל לא תקינה' }, { status: 400 });
+  await prisma.allowedEmail.deleteMany({ where: { email } });
+  return Response.json({ ok: true });
+}
+```
+
+`src/app/api/admin/users/route.ts`:
+```ts
+import { prisma } from '@/lib/db';
+import { getSession } from '@/lib/auth';
+
+export async function GET(req: Request) {
+  const session = await getSession(req);
+  if (session?.role !== 'admin') return Response.json({ error: 'אין הרשאה' }, { status: 403 });
+  const users = await prisma.technician.findMany({
+    select: { id: true, name: true, email: true, isAdmin: true },
+    orderBy: { name: 'asc' },
+  });
+  return Response.json({ users });
+}
+
+export async function PUT(req: Request) {
+  const session = await getSession(req);
+  if (session?.role !== 'admin') return Response.json({ error: 'אין הרשאה' }, { status: 403 });
+  const body = (await req.json().catch(() => ({}))) as { userId?: number; isAdmin?: boolean };
+  const { userId, isAdmin } = body;
+  if (typeof userId !== 'number' || typeof isAdmin !== 'boolean') {
+    return Response.json({ error: 'נתונים לא תקינים' }, { status: 400 });
+  }
+  if (userId === session.userId) {
+    return Response.json({ error: 'לא ניתן לשנות את ההרשאה של עצמך' }, { status: 400 });
+  }
+  const user = await prisma.technician.findUnique({ where: { id: userId } });
+  if (!user) return Response.json({ error: 'משתמש לא נמצא' }, { status: 404 });
+  await prisma.technician.update({ where: { id: userId }, data: { isAdmin } });
+  return Response.json({ ok: true });
+}
+```
+
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `npm test`
@@ -1378,7 +1571,7 @@ Expected: all test files pass (smoke, dates, scheduler, auth, auth-routes, const
 
 ```bash
 git add src/app/api/schedule src/app/api/admin tests/admin-routes.test.ts
-git commit -m "feat: schedule + admin API - overview, generate, save, publish"
+git commit -m "feat: schedule + admin API - overview, generate, save, publish, users, allowed emails"
 ```
 
 ---
@@ -1542,14 +1735,14 @@ git commit -m "feat: app shell - nav bar, week navigation, session redirect"
 
 ---
 
-### Task 9: Auth pages (register / login / admin-login)
+### Task 9: Auth pages (register / login)
 
 **Files:**
-- Create: `src/app/login/page.tsx`, `src/app/register/page.tsx`, `src/app/admin-login/page.tsx`, `src/components/AuthForm.tsx`
+- Create: `src/app/login/page.tsx`, `src/app/register/page.tsx`, `src/components/AuthForm.tsx`
 
 **Interfaces:**
 - Consumes: auth API routes from Task 5.
-- Produces: pages at `/login`, `/register`, `/admin-login`.
+- Produces: pages at `/login`, `/register`. Both redirect to `/` after success — the home page (Task 8) routes by session role (admin → `/admin`, technician → `/constraints`). There is NO `/admin-login` page.
 
 - [ ] **Step 1: Write the shared form component**
 
@@ -1640,7 +1833,7 @@ export default function AuthForm({
 export { Link };
 ```
 
-- [ ] **Step 2: Write the three pages**
+- [ ] **Step 2: Write the two pages**
 
 `src/app/login/page.tsx`:
 ```tsx
@@ -1650,9 +1843,9 @@ import AuthForm from '@/components/AuthForm';
 export default function LoginPage() {
   return (
     <AuthForm
-      title="התחברות טכנאי"
+      title="התחברות"
       endpoint="/api/auth/login"
-      redirectTo="/constraints"
+      redirectTo="/"
       fields={[
         { name: 'email', label: 'אימייל', type: 'email' },
         { name: 'password', label: 'סיסמה', type: 'password' },
@@ -1660,8 +1853,6 @@ export default function LoginPage() {
       footer={
         <>
           אין לך חשבון? <Link href="/register" className="text-blue-600 hover:underline">להרשמה</Link>
-          {' · '}
-          <Link href="/admin-login" className="text-blue-600 hover:underline">כניסת מנהל</Link>
         </>
       }
     />
@@ -1677,9 +1868,9 @@ import AuthForm from '@/components/AuthForm';
 export default function RegisterPage() {
   return (
     <AuthForm
-      title="הרשמת טכנאי"
+      title="הרשמה"
       endpoint="/api/auth/register"
-      redirectTo="/constraints"
+      redirectTo="/"
       fields={[
         { name: 'name', label: 'שם מלא', type: 'text' },
         { name: 'email', label: 'אימייל', type: 'email' },
@@ -1687,31 +1878,9 @@ export default function RegisterPage() {
       ]}
       footer={
         <>
+          <p className="mb-1 text-xs text-gray-400">ההרשמה פתוחה רק למיילים שאושרו על ידי המנהל.</p>
           כבר רשום? <Link href="/login" className="text-blue-600 hover:underline">להתחברות</Link>
         </>
-      }
-    />
-  );
-}
-```
-
-`src/app/admin-login/page.tsx`:
-```tsx
-import Link from 'next/link';
-import AuthForm from '@/components/AuthForm';
-
-export default function AdminLoginPage() {
-  return (
-    <AuthForm
-      title="כניסת מנהל"
-      endpoint="/api/auth/admin-login"
-      redirectTo="/admin"
-      fields={[
-        { name: 'username', label: 'שם משתמש', type: 'text' },
-        { name: 'password', label: 'סיסמה', type: 'password' },
-      ]}
-      footer={
-        <Link href="/login" className="text-blue-600 hover:underline">חזרה לכניסת טכנאים</Link>
       }
     />
   );
@@ -1721,17 +1890,17 @@ export default function AdminLoginPage() {
 - [ ] **Step 3: Manual verification**
 
 Run: `npm run dev`, then:
-1. `/register` — register with a 5-char password → browser blocks (minLength); with 8+ → redirected to `/constraints` (404 page for now is OK).
-2. Register same email again → red Hebrew error "המייל כבר רשום במערכת".
-3. `/login` — wrong password → error; correct → redirect.
-4. `/admin-login` — `admin`/`admin123` → redirect to `/admin` (404 for now OK).
+1. `/register` — register with an email NOT on the allowlist → red Hebrew error "המייל אינו מורשה להרשמה. פנה למנהל.".
+2. `/register` with `gorgani@hp.com` + 8-char password → redirected to `/` → `/admin` (404 for now OK).
+3. Register same email again → "המייל כבר רשום במערכת".
+4. `/login` — wrong password → error; correct → redirect by role.
 5. Forms render RTL, labels in Hebrew, email field LTR.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add src/app/login src/app/register src/app/admin-login src/components/AuthForm.tsx
-git commit -m "feat: auth pages - technician register/login, admin login"
+git add src/app/login src/app/register src/components/AuthForm.tsx
+git commit -m "feat: auth pages - unified email login and allowlist-aware registration"
 ```
 
 ---
@@ -2046,7 +2215,7 @@ git commit -m "feat: technician screens - weekly constraints entry and schedule 
 
 **Interfaces:**
 - Consumes: `GET /api/admin/overview`, `NavBar`, `WeekNav`, labels, dates utils.
-- Produces: `/admin` page. `ADMIN_LINKS` constant duplicated in Task 12's board (two links: `/admin` "לוח בקרה", `/admin/schedule` "תוכנית משמרות").
+- Produces: `/admin` page. `ADMIN_LINKS` constant duplicated in Tasks 12+13 (three links: `/admin` "לוח בקרה", `/admin/schedule` "תוכנית משמרות", `/admin/users` "ניהול משתמשים").
 
 - [ ] **Step 1: Server wrapper**
 
@@ -2060,7 +2229,7 @@ import AdminDashboardClient from './AdminDashboardClient';
 export default async function AdminPage() {
   const token = (await cookies()).get('session')?.value;
   const session = token ? await verifySessionToken(token) : null;
-  if (!session || session.role !== 'admin') redirect('/admin-login');
+  if (!session || session.role !== 'admin') redirect('/login');
   return <AdminDashboardClient />;
 }
 ```
@@ -2080,6 +2249,7 @@ import { CONSTRAINT_LABELS, CONSTRAINT_COLORS, STATUS_LABELS } from '@/lib/label
 const ADMIN_LINKS = [
   { href: '/admin', label: 'לוח בקרה' },
   { href: '/admin/schedule', label: 'תוכנית משמרות' },
+  { href: '/admin/users', label: 'ניהול משתמשים' },
 ];
 
 const STATUS_COLORS: Record<string, string> = {
@@ -2216,7 +2386,7 @@ import AdminScheduleClient from './AdminScheduleClient';
 export default async function AdminSchedulePage() {
   const token = (await cookies()).get('session')?.value;
   const session = token ? await verifySessionToken(token) : null;
-  if (!session || session.role !== 'admin') redirect('/admin-login');
+  if (!session || session.role !== 'admin') redirect('/login');
   return <AdminScheduleClient />;
 }
 ```
@@ -2238,6 +2408,7 @@ import { SHIFT_LABELS, CONSTRAINT_LABELS } from '@/lib/labels';
 const ADMIN_LINKS = [
   { href: '/admin', label: 'לוח בקרה' },
   { href: '/admin/schedule', label: 'תוכנית משמרות' },
+  { href: '/admin/users', label: 'ניהול משתמשים' },
 ];
 
 const SHIFTS = ['morning', 'evening'] as const;
@@ -2481,7 +2652,206 @@ git commit -m "feat: admin schedule board - generate, manual edit, draft, publis
 
 ---
 
-### Task 13: Deploy to Vercel + Neon (guided, interactive)
+### Task 13: Admin users & allowed-emails page
+
+**Files:**
+- Create: `src/app/admin/users/page.tsx`, `src/app/admin/users/AdminUsersClient.tsx`
+
+**Interfaces:**
+- Consumes: `GET/POST/DELETE /api/admin/allowed-emails`, `GET/PUT /api/admin/users`, `NavBar`.
+- Produces: `/admin/users` page.
+
+- [ ] **Step 1: Server wrapper (passes current admin's userId for self-lock)**
+
+`src/app/admin/users/page.tsx`:
+```tsx
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+import { verifySessionToken } from '@/lib/auth';
+import AdminUsersClient from './AdminUsersClient';
+
+export default async function AdminUsersPage() {
+  const token = (await cookies()).get('session')?.value;
+  const session = token ? await verifySessionToken(token) : null;
+  if (!session || session.role !== 'admin') redirect('/login');
+  return <AdminUsersClient myUserId={session.userId!} />;
+}
+```
+
+- [ ] **Step 2: Client component**
+
+`src/app/admin/users/AdminUsersClient.tsx`:
+```tsx
+'use client';
+
+import { useCallback, useEffect, useState } from 'react';
+import NavBar from '@/components/NavBar';
+
+const ADMIN_LINKS = [
+  { href: '/admin', label: 'לוח בקרה' },
+  { href: '/admin/schedule', label: 'תוכנית משמרות' },
+  { href: '/admin/users', label: 'ניהול משתמשים' },
+];
+
+interface AllowedEmail { id: number; email: string }
+interface User { id: number; name: string; email: string; isAdmin: boolean }
+
+export default function AdminUsersClient({ myUserId }: { myUserId: number }) {
+  const [emails, setEmails] = useState<AllowedEmail[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [newEmail, setNewEmail] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    const [emailsRes, usersRes] = await Promise.all([
+      fetch('/api/admin/allowed-emails'),
+      fetch('/api/admin/users'),
+    ]);
+    if (emailsRes.ok) setEmails((await emailsRes.json()).emails);
+    if (usersRes.ok) setUsers((await usersRes.json()).users);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function addEmail(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    const res = await fetch('/api/admin/allowed-emails', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: newEmail }),
+    });
+    if (res.ok) {
+      setNewEmail('');
+      await load();
+    } else {
+      setError((await res.json().catch(() => ({}))).error ?? 'שגיאה');
+    }
+  }
+
+  async function removeEmail(email: string) {
+    await fetch('/api/admin/allowed-emails', {
+      method: 'DELETE',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    await load();
+  }
+
+  async function toggleAdmin(user: User) {
+    setError('');
+    const res = await fetch('/api/admin/users', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ userId: user.id, isAdmin: !user.isAdmin }),
+    });
+    if (!res.ok) {
+      setError((await res.json().catch(() => ({}))).error ?? 'שגיאה');
+    }
+    await load();
+  }
+
+  return (
+    <div>
+      <NavBar name="מנהל" links={ADMIN_LINKS} />
+      <main className="max-w-3xl mx-auto p-4 space-y-8">
+        {error && <p className="text-red-600 text-sm">{error}</p>}
+        {loading ? (
+          <p className="text-center text-gray-500 py-8">טוען...</p>
+        ) : (
+          <>
+            <section>
+              <h2 className="font-bold mb-2">מיילים מורשים להרשמה</h2>
+              <form onSubmit={addEmail} className="flex gap-2 mb-3">
+                <input
+                  type="email"
+                  required
+                  dir="ltr"
+                  value={newEmail}
+                  onChange={e => setNewEmail(e.target.value)}
+                  placeholder="tech@example.com"
+                  className="border rounded px-3 py-2 flex-1"
+                />
+                <button type="submit" className="bg-blue-600 text-white rounded px-4 py-2 hover:bg-blue-700">
+                  הוסף
+                </button>
+              </form>
+              {emails.length === 0 ? (
+                <p className="text-gray-500 text-sm">אין מיילים ברשימה. רק מייל שנוסף כאן יוכל להירשם.</p>
+              ) : (
+                <ul className="bg-white rounded-lg shadow-sm divide-y">
+                  {emails.map(e => (
+                    <li key={e.id} className="flex items-center justify-between px-3 py-2">
+                      <span dir="ltr">{e.email}</span>
+                      <button onClick={() => removeEmail(e.email)} className="text-red-600 text-sm hover:underline">
+                        הסר
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+            <section>
+              <h2 className="font-bold mb-2">משתמשים רשומים</h2>
+              <table className="w-full bg-white rounded-lg shadow-sm text-sm border-collapse">
+                <thead>
+                  <tr>
+                    <th className="border p-2 bg-gray-100 text-start">שם</th>
+                    <th className="border p-2 bg-gray-100 text-start">מייל</th>
+                    <th className="border p-2 bg-gray-100">מנהל</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map(u => (
+                    <tr key={u.id}>
+                      <td className="border p-2">{u.name}{u.id === myUserId && ' (אני)'}</td>
+                      <td className="border p-2" dir="ltr">{u.email}</td>
+                      <td className="border p-2 text-center">
+                        <input
+                          type="checkbox"
+                          checked={u.isAdmin}
+                          disabled={u.id === myUserId}
+                          onChange={() => toggleAdmin(u)}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="text-xs text-gray-400 mt-2">
+                הרשאת מנהל נכנסת לתוקף בכניסה הבאה של המשתמש. לא ניתן לשנות את ההרשאה של עצמך.
+              </p>
+            </section>
+          </>
+        )}
+      </main>
+    </div>
+  );
+}
+```
+
+- [ ] **Step 3: Manual verification**
+
+Run: `npm run dev`:
+1. Admin → `/admin/users` — add an email → appears in list; add same again → "המייל כבר ברשימה".
+2. Remove an email → disappears.
+3. Toggle admin on another user → checkbox sticks after reload; own row checkbox disabled, labeled "(אני)".
+4. Register a new technician with an allowed email → works; with a random email → blocked.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add src/app/admin/users
+git commit -m "feat: admin users page - allowlist management and admin grants"
+```
+
+---
+
+### Task 14: Deploy to Vercel + Neon (guided, interactive)
 
 **Files:**
 - Modify: `prisma/schema.prisma` (provider), `.env` (local stays SQLite? No — switch dev to Neon too, or keep two: see steps)
@@ -2539,6 +2909,7 @@ git commit -m "chore: switch Prisma provider to postgresql for production"
 
 ## Self-Review Notes
 
-- Spec coverage: registration/login (T5, T9), constraints entry + auto-save + lock (T6, T10), published schedule view with highlight (T7, T10), admin overview + statuses (T7, T11), generate/manual-edit/draft/publish + Friday toggle + balance row + red empty cells + warnings (T3, T7, T12), deploy (T13). Friday-toggle-persists-before-generate: `toggleFriday` calls `saveDraft` which upserts the Schedule row — covered.
+- Spec coverage: allowlist registration + email login + bootstrap admin (T5, T9), constraints entry + auto-save + lock (T6, T10), published schedule view with highlight (T7, T10), admin overview + statuses with admins excluded (T7, T11), generate/manual-edit/draft/publish + Friday toggle + balance row + red empty cells + warnings (T3, T7, T12), allowed-emails + admin grants UI (T13), deploy (T14). Friday-toggle-persists-before-generate: `toggleFriday` calls `saveDraft` which upserts the Schedule row — covered.
+- Auth-model update (2026-07-21): admin/admin123 removed; role derives from `Technician.isAdmin`; `ADMIN_EMAIL = gorgani@hp.com` bootstraps the first admin; admins excluded from scheduling; self-demotion blocked (400).
 - Manual edits may violate rules (warning only) — server intentionally does NOT validate `PUT /api/admin/schedule` assignments against constraints (spec: admin decides).
 - Type consistency: `Session`, `TechAvailability`, `GeneratedAssignment`, assignment shape `{date, shift, station, technicianId}` used identically across tasks.
