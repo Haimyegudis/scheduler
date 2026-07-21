@@ -1,0 +1,51 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Technician {
+  id           Int          @id @default(autoincrement())
+  name         String
+  email        String       @unique
+  passwordHash String
+  createdAt    DateTime     @default(now())
+  constraints  Constraint[]
+  assignments  Assignment[]
+}
+
+model Constraint {
+  id           Int        @id @default(autoincrement())
+  technicianId Int
+  technician   Technician @relation(fields: [technicianId], references: [id], onDelete: Cascade)
+  date         String
+  value        String
+
+  @@unique([technicianId, date])
+}
+
+model Schedule {
+  id            Int          @id @default(autoincrement())
+  weekStart     String       @unique
+  status        String       @default("draft")
+  includeFriday Boolean      @default(false)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  assignments   Assignment[]
+}
+
+model Assignment {
+  id           Int        @id @default(autoincrement())
+  scheduleId   Int
+  schedule     Schedule   @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  date         String
+  shift        String
+  station      Int
+  technicianId Int
+  technician   Technician @relation(fields: [technicianId], references: [id], onDelete: Cascade)
+
+  @@unique([scheduleId, date, shift, station])
+}
