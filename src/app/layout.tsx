@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
 import './globals.css';
-import { I18nProvider, tFor, type Lang } from '@/lib/i18n';
+import { I18nProvider } from '@/lib/i18n';
+import { tFor, type Lang } from '@/lib/i18n-dict';
 
 async function getLang(): Promise<Lang> {
   const value = (await cookies()).get('lang')?.value;
