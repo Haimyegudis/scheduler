@@ -219,12 +219,12 @@ export default function AdminReportsClient() {
               </table>
             </div>
             <h3 className="font-bold mt-4 mb-2">פירוט היעדרויות ({year})</h3>
-            {absenceRows.filter(a => a.startDate.startsWith(year) || a.endDate.startsWith(year)).length === 0 ? (
+            {absenceRows.filter(a => a.startDate <= `${year}-12-31` && a.endDate >= `${year}-01-01`).length === 0 ? (
               <p className="text-gray-500 text-sm">אין היעדרויות בשנה זו.</p>
             ) : (
               <ul className="bg-white rounded-lg shadow-sm divide-y text-sm">
                 {absenceRows
-                  .filter(a => a.startDate.startsWith(year) || a.endDate.startsWith(year))
+                  .filter(a => a.startDate <= `${year}-12-31` && a.endDate >= `${year}-01-01`)
                   .map(a => (
                     <li key={a.id} className="px-3 py-2 flex flex-wrap gap-2">
                       <span className="font-semibold">{a.technicianName}</span>
