@@ -64,6 +64,7 @@ CREATE TABLE "Assignment" (
     "technicianId" INTEGER,
     "experimenter" TEXT,
     "note" TEXT,
+    "color" TEXT,
 
     CONSTRAINT "Assignment_pkey" PRIMARY KEY ("id")
 );

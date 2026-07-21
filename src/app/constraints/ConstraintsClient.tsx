@@ -7,8 +7,9 @@ import Loading from '@/components/Loading';
 import { getCurrentWeekStart, weekDates, dayName, formatDate } from '@/lib/dates';
 import { constraintLabel, absenceLabel } from '@/lib/labels';
 import { useT, translateApiError } from '@/lib/i18n';
+import { toggleConstraint, stateFromValue, type ToggleButton } from '@/lib/constraintToggle';
 
-const OPTIONS = ['morning', 'evening', 'flex', 'off'];
+const BUTTONS: ToggleButton[] = ['morning', 'evening', 'off'];
 
 export default function ConstraintsClient({ name }: { name: string }) {
   const { t, lang } = useT();
@@ -49,16 +50,29 @@ export default function ConstraintsClient({ name }: { name: string }) {
     load(weekStart);
   }, [weekStart, load]);
 
-  async function setDay(date: string, value: string) {
+  async function toggleDay(date: string, button: ToggleButton) {
     if (published) return;
     const prev = constraints;
-    setConstraints({ ...constraints, [date]: value });
+    const nextValue = toggleConstraint(constraints[date], button);
+    if (nextValue === null) {
+      const { [date]: _removed, ...rest } = constraints;
+      setConstraints(rest);
+    } else {
+      setConstraints({ ...constraints, [date]: nextValue });
+    }
     try {
-      const res = await fetch('/api/constraints', {
-        method: 'PUT',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ date, value }),
-      });
+      const res =
+        nextValue === null
+          ? await fetch('/api/constraints', {
+              method: 'DELETE',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ date }),
+            })
+          : await fetch('/api/constraints', {
+              method: 'PUT',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ date, value: nextValue }),
+            });
       if (!res.ok) {
         setConstraints(prev);
         const data = await res.json().catch(() => ({}));
@@ -98,20 +112,24 @@ export default function ConstraintsClient({ name }: { name: string }) {
                   </span>
                 ) : (
                   <div className="flex gap-2 flex-wrap">
-                    {OPTIONS.map(opt => (
-                      <button
-                        key={opt}
-                        disabled={published}
-                        onClick={() => setDay(date, opt)}
-                        className={`px-3 py-1.5 rounded-full text-sm border transition ${
-                          constraints[date] === opt
-                            ? 'bg-blue-600 text-white border-blue-600'
-                            : 'bg-white hover:bg-gray-100'
-                        } ${published ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      >
-                        {constraintLabel(lang, opt)}
-                      </button>
-                    ))}
+                    {BUTTONS.map(opt => {
+                      const active = stateFromValue(constraints[date])[opt];
+                      return (
+                        <button
+                          key={opt}
+                          disabled={published}
+                          aria-pressed={active}
+                          onClick={() => toggleDay(date, opt)}
+                          className={`px-3 py-1.5 rounded-full text-sm border transition ${
+                            active
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'bg-white hover:bg-gray-100'
+                          } ${published ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          {constraintLabel(lang, opt)}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>

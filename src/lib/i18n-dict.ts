@@ -136,6 +136,32 @@ const he = {
   stationNameRequired: 'נא להזין שם עמדה',
   stationDeleteBlocked: 'לא ניתן למחוק עמדה שמשובצת בתוכנית — ניתן להשבית אותה',
   stationNotFound: 'עמדה לא נמצאה',
+
+  bothShiftsLabel: 'בוקר+ערב',
+  boardUnfilledMark: '?',
+
+  deleteUserBtn: 'מחק',
+  deleteUserConfirmMsg: 'למחוק את המשתמש? כל האילוצים, ההיעדרויות והשיבוצים שלו יימחקו לצמיתות. לא ניתן לבטל פעולה זו.',
+  deleteUserFailed: 'מחיקת המשתמש נכשלה',
+
+  colorPickerLabel: 'צבע תא',
+  clearColorBtn: 'נקה',
+  applyRowColorBtn: 'החל על השורה',
+  clearRowColorBtn: 'נקה מהשורה',
+  applyColumnColorBtn: 'החל על העמודה',
+  clearColumnColorBtn: 'נקה מהעמודה',
+  colorRed: 'אדום',
+  colorOrange: 'כתום',
+  colorYellow: 'צהוב',
+  colorGreen: 'ירוק',
+  colorTeal: 'טורקיז',
+  colorBlue: 'כחול',
+  colorPurple: 'סגול',
+  colorPink: 'ורוד',
+
+  copyScheduleBtn: 'העתק תוכנית',
+  copyScheduleSuccessMsg: 'התוכנית הועתקה — ניתן להדביק ב-Outlook',
+  copyScheduleFailedMsg: 'ההעתקה נכשלה',
 } as const;
 
 const en: Record<keyof typeof he, string> = {
@@ -273,6 +299,32 @@ const en: Record<keyof typeof he, string> = {
   stationNameRequired: 'Please enter a station name',
   stationDeleteBlocked: 'Cannot delete a station that is used in a schedule — deactivate it instead',
   stationNotFound: 'Station not found',
+
+  bothShiftsLabel: 'Morning+Evening',
+  boardUnfilledMark: '?',
+
+  deleteUserBtn: 'Delete',
+  deleteUserConfirmMsg: 'Delete this user? All of their constraints, absences, and assignments will be permanently deleted. This cannot be undone.',
+  deleteUserFailed: 'Failed to delete user',
+
+  colorPickerLabel: 'Cell color',
+  clearColorBtn: 'Clear',
+  applyRowColorBtn: 'Apply to row',
+  clearRowColorBtn: 'Clear row',
+  applyColumnColorBtn: 'Apply to column',
+  clearColumnColorBtn: 'Clear column',
+  colorRed: 'Red',
+  colorOrange: 'Orange',
+  colorYellow: 'Yellow',
+  colorGreen: 'Green',
+  colorTeal: 'Teal',
+  colorBlue: 'Blue',
+  colorPurple: 'Purple',
+  colorPink: 'Pink',
+
+  copyScheduleBtn: 'Copy schedule',
+  copyScheduleSuccessMsg: 'Schedule copied — you can paste it into Outlook',
+  copyScheduleFailedMsg: 'Copy failed',
 };
 
 export const dict = { he, en };
@@ -294,6 +346,7 @@ const apiErrorMap: Record<string, string> = {
   'המייל אינו מורשה להרשמה. פנה למנהל.': 'This email is not authorized to register. Contact the admin.',
   'המייל כבר רשום במערכת': 'This email is already registered',
   'לא ניתן לשנות את ההרשאה של עצמך': 'You cannot change your own permission',
+  'לא ניתן למחוק את עצמך': 'You cannot delete yourself',
   'משתמש לא נמצא': 'User not found',
   'מייל או סיסמה שגויים': 'Incorrect email or password',
   'נתוני היעדרות לא תקינים': 'Invalid absence data',

@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { weekDates, weekStartOf } from '@/lib/dates';
+import { isValidCellColor } from '@/lib/cellColors';
 
 interface SaveBody {
   weekStart?: string;
@@ -12,6 +13,7 @@ interface SaveBody {
     technicianId: number | null;
     experimenter?: string | null;
     note?: string | null;
+    color?: string | null;
   }>;
 }
 
@@ -35,7 +37,8 @@ export async function PUT(req: Request) {
       Number.isInteger(a.stationId) &&
       (a.technicianId === null || Number.isInteger(a.technicianId)) &&
       (a.experimenter === undefined || a.experimenter === null || typeof a.experimenter === 'string') &&
-      (a.note === undefined || a.note === null || typeof a.note === 'string')
+      (a.note === undefined || a.note === null || typeof a.note === 'string') &&
+      isValidCellColor(a.color)
   );
   if (!valid) return Response.json({ error: 'נתוני שיבוץ לא תקינים' }, { status: 400 });
 

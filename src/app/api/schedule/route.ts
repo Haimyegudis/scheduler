@@ -18,6 +18,7 @@ export async function GET(req: Request) {
           technicianId: true,
           experimenter: true,
           note: true,
+          color: true,
         },
       },
     },

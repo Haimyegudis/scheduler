@@ -65,6 +65,7 @@ model Assignment {
   technician   Technician? @relation(fields: [technicianId], references: [id], onDelete: Cascade)
   experimenter String?
   note         String?
+  color        String?
 
   @@unique([scheduleId, date, shift, stationId])
 }

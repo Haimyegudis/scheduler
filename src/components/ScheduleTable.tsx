@@ -3,6 +3,7 @@
 import { dayName, formatDate } from '@/lib/dates';
 import { shiftLabel } from '@/lib/labels';
 import { useT } from '@/lib/i18n';
+import { colorClass } from '@/lib/cellColors';
 
 export interface AssignmentView {
   date: string;
@@ -11,6 +12,7 @@ export interface AssignmentView {
   technicianId: number | null;
   experimenter?: string | null;
   note?: string | null;
+  color?: string | null;
 }
 
 export interface StationView {
@@ -61,15 +63,16 @@ export default function ScheduleTable({
                 {dates.map(date => {
                   const a = cell(date, shift, station.id);
                   const mine = a && a.technicianId !== null && a.technicianId === highlightTechId;
-                  const empty = !a || (a.technicianId === null && !a.experimenter && !a.note);
+                  const hasContent = a && (a.technicianId !== null || a.experimenter || a.note);
+                  const cellColorClass = colorClass(a?.color);
+                  const empty = !hasContent && !cellColorClass;
+                  const bgClass = cellColorClass || (empty ? 'bg-red-50' : mine ? 'bg-blue-100' : '');
                   return (
                     <td
                       key={date}
-                      className={`border p-2 text-center ${
-                        empty ? 'bg-red-50' : mine ? 'bg-blue-100 font-bold' : ''
-                      }`}
+                      className={`border p-2 text-center ${bgClass} ${mine ? 'font-bold' : ''}`}
                     >
-                      {!empty && a && (
+                      {hasContent && a && (
                         <>
                           {a.technicianId !== null && <div>{nameOf(a.technicianId)}</div>}
                           {a.experimenter && (

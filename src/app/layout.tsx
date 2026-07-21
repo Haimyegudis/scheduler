@@ -6,7 +6,7 @@ import { tFor, type Lang } from '@/lib/i18n-dict';
 
 async function getLang(): Promise<Lang> {
   const value = (await cookies()).get('lang')?.value;
-  return value === 'en' ? 'en' : 'he';
+  return value === 'he' ? 'he' : 'en';
 }
 
 export async function generateMetadata(): Promise<Metadata> {

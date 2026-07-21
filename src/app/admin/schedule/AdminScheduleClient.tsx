@@ -6,7 +6,9 @@ import WeekNav from '@/components/WeekNav';
 import Loading from '@/components/Loading';
 import { getCurrentWeekStart, weekDates, dayName, formatDate } from '@/lib/dates';
 import { shiftLabel, constraintLabel, absenceLabel } from '@/lib/labels';
-import { useT, translateApiError } from '@/lib/i18n';
+import { useT, translateApiError, type DictKey } from '@/lib/i18n';
+import { COLOR_TOKENS, COLOR_CLASSES, colorClass, type ColorToken } from '@/lib/cellColors';
+import { buildScheduleHtmlTable, buildScheduleText } from '@/lib/exportSchedule';
 
 const ADMIN_LINKS_KEYS = [
   { href: '/admin', key: 'dashboardNav' },
@@ -23,9 +25,20 @@ const key = (date: string, shift: string, stationId: number): CellKey => `${date
 
 interface Tech { id: number; name: string }
 interface Station { id: number; name: string; position: number; active: boolean }
-interface CellValue { technicianId: number | ''; experimenter: string; note: string }
+interface CellValue { technicianId: number | ''; experimenter: string; note: string; color: string | null }
 
-const emptyCell: CellValue = { technicianId: '', experimenter: '', note: '' };
+const emptyCell: CellValue = { technicianId: '', experimenter: '', note: '', color: null };
+
+const COLOR_NAME_KEYS: Record<ColorToken, DictKey> = {
+  red: 'colorRed',
+  orange: 'colorOrange',
+  yellow: 'colorYellow',
+  green: 'colorGreen',
+  teal: 'colorTeal',
+  blue: 'colorBlue',
+  purple: 'colorPurple',
+  pink: 'colorPink',
+};
 
 export default function AdminScheduleClient() {
   const { t, lang } = useT();
@@ -44,6 +57,8 @@ export default function AdminScheduleClient() {
   const [newStationName, setNewStationName] = useState('');
   const [stationDrafts, setStationDrafts] = useState<Record<number, string>>({});
   const [stationsMessage, setStationsMessage] = useState('');
+  const [colorPopoverKey, setColorPopoverKey] = useState<CellKey | null>(null);
+  const [pendingColor, setPendingColor] = useState<string | null>(null);
 
   const loadStations = useCallback(async () => {
     try {
@@ -81,6 +96,7 @@ export default function AdminScheduleClient() {
             technicianId: a.technicianId ?? '',
             experimenter: a.experimenter ?? '',
             note: a.note ?? '',
+            color: a.color ?? null,
           };
         }
         setCells(next);
@@ -115,7 +131,9 @@ export default function AdminScheduleClient() {
   const assignmentsPayload = useMemo(() => {
     const validDates = new Set(weekDates(weekStart, includeFriday));
     return Object.entries(cells)
-      .filter(([, v]) => v.technicianId !== '' || v.experimenter.trim() !== '' || v.note.trim() !== '')
+      .filter(
+        ([, v]) => v.technicianId !== '' || v.experimenter.trim() !== '' || v.note.trim() !== '' || v.color !== null
+      )
       .map(([k, v]) => {
         const [date, shift, stationId] = k.split('|');
         return {
@@ -125,6 +143,7 @@ export default function AdminScheduleClient() {
           technicianId: v.technicianId === '' ? null : v.technicianId,
           experimenter: v.experimenter.trim() || undefined,
           note: v.note.trim() || undefined,
+          color: v.color,
         };
       })
       .filter(a => validDates.has(a.date));
@@ -152,6 +171,94 @@ export default function AdminScheduleClient() {
 
   function updateCell(k: CellKey, patch: Partial<CellValue>) {
     setCells(c => ({ ...c, [k]: { ...(c[k] ?? emptyCell), ...patch } }));
+  }
+
+  // "Name · Morning/Evening/Morning+Evening" availability hint shown in each board <option>.
+  function dayRequestSuffix(techId: number, date: string): string {
+    const c = constraints[String(techId)]?.[date];
+    if (c === 'flex') return t('bothShiftsLabel');
+    if (c === 'morning') return constraintLabel(lang, 'morning');
+    if (c === 'evening') return constraintLabel(lang, 'evening');
+    if (c === 'off') return constraintLabel(lang, 'off');
+    return t('boardUnfilledMark');
+  }
+
+  // Sort order: exact shift match first, then flex (both), then unfilled/mismatch.
+  function optionPriority(techId: number, date: string, shift: string): number {
+    const c = constraints[String(techId)]?.[date];
+    if (c === shift) return 0;
+    if (c === 'flex') return 1;
+    return 2;
+  }
+
+  function openColorPopover(k: CellKey, current: string | null) {
+    setPendingColor(current);
+    setColorPopoverKey(prev => (prev === k ? null : k));
+  }
+
+  function pickColor(k: CellKey, token: ColorToken) {
+    setPendingColor(token);
+    updateCell(k, { color: token });
+  }
+
+  function clearCellColor(k: CellKey) {
+    setPendingColor(null);
+    updateCell(k, { color: null });
+  }
+
+  function applyColorToRow(shift: string, stationId: number, color: string | null) {
+    setCells(c => {
+      const next = { ...c };
+      for (const date of dates) {
+        const k = key(date, shift, stationId);
+        next[k] = { ...(next[k] ?? emptyCell), color };
+      }
+      return next;
+    });
+  }
+
+  function applyColorToColumn(date: string, color: string | null) {
+    setCells(c => {
+      const next = { ...c };
+      for (const shift of SHIFTS) {
+        for (const station of boardStations) {
+          const k = key(date, shift, station.id);
+          next[k] = { ...(next[k] ?? emptyCell), color };
+        }
+      }
+      return next;
+    });
+  }
+
+  async function copySchedule() {
+    try {
+      const days = dates.map(d => ({ date: d, label: `${dayName(d, lang)} ${formatDate(d)}` }));
+      const rows = SHIFTS.flatMap(shift =>
+        boardStations.map(station => ({
+          label: `${shiftLabel(lang, shift)} · ${station.name}`,
+          cells: Object.fromEntries(
+            dates.map(date => {
+              const v = cells[key(date, shift, station.id)] ?? emptyCell;
+              const techName = v.technicianId === '' ? null : technicians.find(tc => tc.id === v.technicianId)?.name ?? null;
+              return [
+                date,
+                { technicianName: techName, experimenter: v.experimenter || null, note: v.note || null, color: v.color },
+              ];
+            })
+          ),
+        }))
+      );
+      const html = buildScheduleHtmlTable(t('shiftStationHeader'), days, rows);
+      const text = buildScheduleText(t('shiftStationHeader'), days, rows);
+      const item = new ClipboardItem({
+        'text/html': new Blob([html], { type: 'text/html' }),
+        'text/plain': new Blob([text], { type: 'text/plain' }),
+      });
+      await navigator.clipboard.write([item]);
+      setMessage(t('copyScheduleSuccessMsg'));
+    } catch {
+      setMessage(t('copyScheduleFailedMsg'));
+    }
   }
 
   async function saveDraft(overrideFriday?: boolean): Promise<boolean> {
@@ -362,6 +469,9 @@ export default function AdminScheduleClient() {
               <button onClick={publish} className="bg-green-600 text-white rounded px-4 py-2 hover:bg-green-700">
                 {t('publishBtn')}
               </button>
+              <button onClick={copySchedule} className="bg-white border rounded px-4 py-2 hover:bg-gray-100">
+                {t('copyScheduleBtn')}
+              </button>
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={includeFriday} onChange={e => toggleFriday(e.target.checked)} />
                 {t('includeFridayLabel')}
@@ -402,16 +512,30 @@ export default function AdminScheduleClient() {
                             const k = key(date, shift, station.id);
                             const v = cells[k] ?? emptyCell;
                             const warning = warningsFor(date, shift, v.technicianId);
+                            const hasContent = v.technicianId !== '' || v.experimenter.trim() !== '' || v.note.trim() !== '';
+                            const cellColorClass = colorClass(v.color);
+                            const bgClass = cellColorClass || (!hasContent ? 'bg-red-50' : '');
                             return (
-                              <td key={date} className={`border p-1 align-top ${v.technicianId === '' ? 'bg-red-50' : ''}`}>
+                              <td key={date} className={`relative border p-1 align-top ${bgClass}`}>
+                                <div className="flex justify-end">
+                                  <button
+                                    type="button"
+                                    aria-label={t('colorPickerLabel')}
+                                    onClick={() => openColorPopover(k, v.color)}
+                                    className={`w-3.5 h-3.5 rounded-full border border-gray-400 shrink-0 ${
+                                      cellColorClass || 'bg-white'
+                                    }`}
+                                  />
+                                </div>
                                 <select
                                   value={v.technicianId}
                                   onChange={e =>
                                     updateCell(k, { technicianId: e.target.value === '' ? '' : Number(e.target.value) })
                                   }
+                                  aria-label={t('emptySelectOption')}
                                   className="w-full border-0 bg-transparent text-center text-xs"
                                 >
-                                  <option value="">{t('emptySelectOption')}</option>
+                                  <option value=""></option>
                                   {technicians
                                     .filter(
                                       tc =>
@@ -419,8 +543,16 @@ export default function AdminScheduleClient() {
                                           !absences[String(tc.id)]?.[date]) ||
                                         tc.id === v.technicianId
                                     )
+                                    .slice()
+                                    .sort(
+                                      (a, b) =>
+                                        optionPriority(a.id, date, shift) - optionPriority(b.id, date, shift) ||
+                                        a.name.localeCompare(b.name)
+                                    )
                                     .map(tc => (
-                                      <option key={tc.id} value={tc.id}>{tc.name}</option>
+                                      <option key={tc.id} value={tc.id}>
+                                        {tc.name} · {dayRequestSuffix(tc.id, date)}
+                                      </option>
                                     ))}
                                 </select>
                                 <input
@@ -436,6 +568,62 @@ export default function AdminScheduleClient() {
                                   className="w-full border rounded px-1 text-xs mt-1"
                                 />
                                 {warning && <div className="text-xs text-orange-600 text-center">⚠ {warning}</div>}
+                                {colorPopoverKey === k && (
+                                  <div className="absolute z-20 top-6 end-0 bg-white border rounded shadow-lg p-2 w-40 text-xs space-y-1">
+                                    <div className="grid grid-cols-4 gap-1 mb-1">
+                                      {COLOR_TOKENS.map(tok => (
+                                        <button
+                                          key={tok}
+                                          type="button"
+                                          aria-label={t(COLOR_NAME_KEYS[tok])}
+                                          onClick={() => pickColor(k, tok)}
+                                          className={`w-6 h-6 rounded ${COLOR_CLASSES[tok]} ${
+                                            pendingColor === tok ? 'ring-2 ring-blue-600' : ''
+                                          }`}
+                                        />
+                                      ))}
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => clearCellColor(k)}
+                                      className="w-full text-start px-1 py-0.5 hover:bg-gray-100 rounded"
+                                    >
+                                      {t('clearColorBtn')}
+                                    </button>
+                                    <hr />
+                                    <button
+                                      type="button"
+                                      disabled={!pendingColor}
+                                      onClick={() => applyColorToRow(shift, station.id, pendingColor)}
+                                      className="w-full text-start px-1 py-0.5 hover:bg-gray-100 rounded disabled:opacity-40"
+                                    >
+                                      {t('applyRowColorBtn')}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => applyColorToRow(shift, station.id, null)}
+                                      className="w-full text-start px-1 py-0.5 hover:bg-gray-100 rounded"
+                                    >
+                                      {t('clearRowColorBtn')}
+                                    </button>
+                                    <hr />
+                                    <button
+                                      type="button"
+                                      disabled={!pendingColor}
+                                      onClick={() => applyColorToColumn(date, pendingColor)}
+                                      className="w-full text-start px-1 py-0.5 hover:bg-gray-100 rounded disabled:opacity-40"
+                                    >
+                                      {t('applyColumnColorBtn')}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => applyColorToColumn(date, null)}
+                                      className="w-full text-start px-1 py-0.5 hover:bg-gray-100 rounded"
+                                    >
+                                      {t('clearColumnColorBtn')}
+                                    </button>
+                                  </div>
+                                )}
                               </td>
                             );
                           })}

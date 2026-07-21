@@ -101,6 +101,26 @@ export default function AdminUsersClient({ myUserId }: { myUserId: number }) {
     await load();
   }
 
+  async function deleteUser(user: User) {
+    if (user.id === myUserId) return;
+    if (!confirm(t('deleteUserConfirmMsg'))) return;
+    setError('');
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'DELETE',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ userId: user.id }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error ? translateApiError(lang, data.error) : t('deleteUserFailed'));
+      }
+    } catch {
+      setError(t('networkError'));
+    }
+    await load();
+  }
+
   return (
     <div>
       <NavBar name={t('adminName')} links={ADMIN_LINKS} />
@@ -149,6 +169,7 @@ export default function AdminUsersClient({ myUserId }: { myUserId: number }) {
                     <th className="border p-2 bg-gray-100 text-start">{t('nameCol')}</th>
                     <th className="border p-2 bg-gray-100 text-start">{t('emailCol')}</th>
                     <th className="border p-2 bg-gray-100">{t('adminCol')}</th>
+                    <th className="border p-2 bg-gray-100"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -163,6 +184,17 @@ export default function AdminUsersClient({ myUserId }: { myUserId: number }) {
                           disabled={u.id === myUserId}
                           onChange={() => toggleAdmin(u)}
                         />
+                      </td>
+                      <td className="border p-2 text-center">
+                        <button
+                          onClick={() => deleteUser(u)}
+                          disabled={u.id === myUserId}
+                          className={`text-sm ${
+                            u.id === myUserId ? 'text-gray-300 cursor-not-allowed' : 'text-red-600 hover:underline'
+                          }`}
+                        >
+                          {t('deleteUserBtn')}
+                        </button>
                       </td>
                     </tr>
                   ))}
