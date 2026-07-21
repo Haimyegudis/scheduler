@@ -3470,7 +3470,340 @@ git commit -m "feat: admin-entered absences (vacation/sick/miluim) override cons
 
 ---
 
-### Task 15: Deploy to Vercel + Neon (guided, interactive)
+### Task 15: Reports (per-worker / per-machine, published schedules)
+
+**Files:**
+- Create: `src/app/api/admin/reports/route.ts`, `src/app/admin/reports/page.tsx`, `src/app/admin/reports/AdminReportsClient.tsx`
+- Modify: `ADMIN_LINKS` in `src/app/admin/AdminDashboardClient.tsx`, `src/app/admin/schedule/AdminScheduleClient.tsx`, `src/app/admin/users/AdminUsersClient.tsx`, `src/app/admin/absences/AdminAbsencesClient.tsx` (add 5th link `{ href: '/admin/reports', label: 'דוחות' }`)
+- Test: `tests/reports-routes.test.ts`
+
+**Interfaces:**
+- Consumes: prisma, getSession, dayName/formatDate, SHIFT_LABELS, `/api/admin/users` (worker dropdown source).
+- Produces: `GET /api/admin/reports?from=YYYY-MM-DD&to=YYYY-MM-DD` (admin only) → `{ assignments: Array<{date, shift, station, technicianId, technicianName}> }` — only from schedules with status `published`, ordered by date/shift/station.
+
+- [ ] **Step 1: Write the failing tests**
+
+`tests/reports-routes.test.ts`:
+```ts
+import { test, expect, beforeEach } from 'vitest';
+import { prisma } from '@/lib/db';
+import { createSessionToken } from '@/lib/auth';
+import { GET as getReports } from '@/app/api/admin/reports/route';
+
+async function adminReq(url: string): Promise<Request> {
+  const token = await createSessionToken({ userId: 999, role: 'admin', name: 'מנהל' });
+  return new Request(`http://test${url}`, { headers: { cookie: `session=${token}` } });
+}
+
+let techId: number;
+
+beforeEach(async () => {
+  await prisma.technician.deleteMany();
+  await prisma.schedule.deleteMany();
+  const t = await prisma.technician.create({
+    data: { name: 'רון', email: 'rep@x.com', passwordHash: 'x' },
+  });
+  techId = t.id;
+  const pub = await prisma.schedule.create({ data: { weekStart: '2026-07-05', status: 'published' } });
+  const draft = await prisma.schedule.create({ data: { weekStart: '2026-07-12', status: 'draft' } });
+  await prisma.assignment.createMany({
+    data: [
+      { scheduleId: pub.id, date: '2026-07-05', shift: 'morning', station: 2, technicianId: techId },
+      { scheduleId: pub.id, date: '2026-07-06', shift: 'evening', station: 3, technicianId: techId },
+      { scheduleId: draft.id, date: '2026-07-13', shift: 'morning', station: 1, technicianId: techId },
+    ],
+  });
+});
+
+test('returns published assignments in range with technician name, ordered', async () => {
+  const res = await getReports(await adminReq('/x?from=2026-07-01&to=2026-07-31'));
+  expect(res.status).toBe(200);
+  const data = await res.json();
+  expect(data.assignments).toHaveLength(2); // draft excluded
+  expect(data.assignments[0]).toMatchObject({
+    date: '2026-07-05', shift: 'morning', station: 2, technicianId: techId, technicianName: 'רון',
+  });
+});
+
+test('range filter excludes out-of-range dates', async () => {
+  const res = await getReports(await adminReq('/x?from=2026-07-06&to=2026-07-06'));
+  const data = await res.json();
+  expect(data.assignments).toHaveLength(1);
+  expect(data.assignments[0].date).toBe('2026-07-06');
+});
+
+test('rejects invalid range or missing params with 400', async () => {
+  expect((await getReports(await adminReq('/x?from=2026-07-31&to=2026-07-01'))).status).toBe(400);
+  expect((await getReports(await adminReq('/x?from=2026-07-01'))).status).toBe(400);
+});
+
+test('rejects non-admin with 403', async () => {
+  const token = await createSessionToken({ userId: techId, role: 'technician', name: 'רון' });
+  const res = await getReports(new Request('http://test/x?from=2026-07-01&to=2026-07-31', {
+    headers: { cookie: `session=${token}` },
+  }));
+  expect(res.status).toBe(403);
+});
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `npx vitest run tests/reports-routes.test.ts` → FAIL (module not found).
+
+- [ ] **Step 3: Implement the API**
+
+`src/app/api/admin/reports/route.ts`:
+```ts
+import { prisma } from '@/lib/db';
+import { getSession } from '@/lib/auth';
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+export async function GET(req: Request) {
+  const session = await getSession(req);
+  if (session?.role !== 'admin') return Response.json({ error: 'אין הרשאה' }, { status: 403 });
+  const params = new URL(req.url).searchParams;
+  const from = params.get('from') ?? '';
+  const to = params.get('to') ?? '';
+  if (!DATE_RE.test(from) || !DATE_RE.test(to) || from > to) {
+    return Response.json({ error: 'טווח תאריכים לא תקין' }, { status: 400 });
+  }
+  const rows = await prisma.assignment.findMany({
+    where: { date: { gte: from, lte: to }, schedule: { status: 'published' } },
+    include: { technician: { select: { name: true } } },
+    orderBy: [{ date: 'asc' }, { shift: 'asc' }, { station: 'asc' }],
+  });
+  return Response.json({
+    assignments: rows.map(a => ({
+      date: a.date,
+      shift: a.shift,
+      station: a.station,
+      technicianId: a.technicianId,
+      technicianName: a.technician.name,
+    })),
+  });
+}
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `npx vitest run tests/reports-routes.test.ts` → 4 passed. Then `npm test` → all passing.
+
+- [ ] **Step 5: Reports page**
+
+`src/app/admin/reports/page.tsx`:
+```tsx
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+import { verifySessionToken } from '@/lib/auth';
+import AdminReportsClient from './AdminReportsClient';
+
+export default async function AdminReportsPage() {
+  const token = (await cookies()).get('session')?.value;
+  const session = token ? await verifySessionToken(token) : null;
+  if (!session || session.role !== 'admin') redirect('/login');
+  return <AdminReportsClient />;
+}
+```
+
+`src/app/admin/reports/AdminReportsClient.tsx`:
+```tsx
+'use client';
+
+import { useCallback, useEffect, useState } from 'react';
+import NavBar from '@/components/NavBar';
+import { dayName, formatDate } from '@/lib/dates';
+import { SHIFT_LABELS } from '@/lib/labels';
+
+const ADMIN_LINKS = [
+  { href: '/admin', label: 'לוח בקרה' },
+  { href: '/admin/schedule', label: 'תוכנית משמרות' },
+  { href: '/admin/users', label: 'ניהול משתמשים' },
+  { href: '/admin/absences', label: 'היעדרויות' },
+  { href: '/admin/reports', label: 'דוחות' },
+];
+
+interface ReportRow {
+  date: string;
+  shift: string;
+  station: number;
+  technicianId: number;
+  technicianName: string;
+}
+interface Tech { id: number; name: string }
+
+function currentMonth(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function monthRange(month: string): { from: string; to: string } {
+  const [y, m] = month.split('-').map(Number);
+  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return { from: `${month}-01`, to: `${month}-${String(lastDay).padStart(2, '0')}` };
+}
+
+export default function AdminReportsClient() {
+  const [month, setMonth] = useState(currentMonth());
+  const [mode, setMode] = useState<'worker' | 'machine'>('worker');
+  const [workerId, setWorkerId] = useState('');
+  const [station, setStation] = useState('1');
+  const [rows, setRows] = useState<ReportRow[]>([]);
+  const [techs, setTechs] = useState<Tech[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/admin/users')
+      .then(r => (r.ok ? r.json() : { users: [] }))
+      .then(d => setTechs((d.users as Array<Tech & { isAdmin: boolean }>).filter(u => !u.isAdmin)))
+      .catch(() => setTechs([]));
+  }, []);
+
+  const load = useCallback(async (m: string) => {
+    setLoading(true);
+    const { from, to } = monthRange(m);
+    try {
+      const res = await fetch(`/api/admin/reports?from=${from}&to=${to}`);
+      setRows(res.ok ? (await res.json()).assignments : []);
+    } catch {
+      setRows([]);
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    load(month);
+  }, [month, load]);
+
+  const filtered =
+    mode === 'worker'
+      ? rows.filter(r => String(r.technicianId) === workerId)
+      : rows.filter(r => String(r.station) === station);
+
+  const morningCount = filtered.filter(r => r.shift === 'morning').length;
+  const eveningCount = filtered.filter(r => r.shift === 'evening').length;
+
+  return (
+    <div>
+      <NavBar name="מנהל" links={ADMIN_LINKS} />
+      <main className="max-w-3xl mx-auto p-4 space-y-4">
+        <div className="bg-white rounded-lg shadow-sm p-4 flex flex-wrap items-end gap-3">
+          <label className="block text-sm">
+            חודש
+            <input
+              type="month"
+              value={month}
+              onChange={e => setMonth(e.target.value)}
+              className="block mt-1 border rounded px-2 py-1.5"
+            />
+          </label>
+          <label className="block text-sm">
+            תצוגה
+            <select
+              value={mode}
+              onChange={e => setMode(e.target.value as 'worker' | 'machine')}
+              className="block mt-1 border rounded px-2 py-1.5"
+            >
+              <option value="worker">לפי עובד</option>
+              <option value="machine">לפי מכונה</option>
+            </select>
+          </label>
+          {mode === 'worker' ? (
+            <label className="block text-sm">
+              עובד
+              <select
+                value={workerId}
+                onChange={e => setWorkerId(e.target.value)}
+                className="block mt-1 border rounded px-2 py-1.5 min-w-36"
+              >
+                <option value="">בחר עובד</option>
+                {techs.map(t => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <label className="block text-sm">
+              מכונה (עמדה)
+              <select
+                value={station}
+                onChange={e => setStation(e.target.value)}
+                className="block mt-1 border rounded px-2 py-1.5"
+              >
+                {[1, 2, 3, 4].map(s => (
+                  <option key={s} value={s}>עמדה {s}</option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
+        {loading ? (
+          <p className="text-center text-gray-500 py-8">טוען...</p>
+        ) : mode === 'worker' && !workerId ? (
+          <p className="text-center text-gray-500 py-8">בחר עובד להצגת הדוח.</p>
+        ) : (
+          <>
+            <div className="flex gap-2 text-sm">
+              <span className="bg-white border rounded-full px-3 py-1">סה"כ: {filtered.length}</span>
+              <span className="bg-white border rounded-full px-3 py-1">בוקר: {morningCount}</span>
+              <span className="bg-white border rounded-full px-3 py-1">ערב: {eveningCount}</span>
+            </div>
+            {filtered.length === 0 ? (
+              <p className="text-gray-500 text-sm">אין משמרות בתקופה זו (רק תוכניות שפורסמו נכללות).</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full bg-white rounded-lg shadow-sm text-sm border-collapse">
+                  <thead>
+                    <tr>
+                      <th className="border p-2 bg-gray-100">תאריך</th>
+                      <th className="border p-2 bg-gray-100">יום</th>
+                      <th className="border p-2 bg-gray-100">משמרת</th>
+                      <th className="border p-2 bg-gray-100">
+                        {mode === 'worker' ? 'מכונה (עמדה)' : 'עובד'}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((r, i) => (
+                      <tr key={i}>
+                        <td className="border p-2 text-center">{formatDate(r.date)}</td>
+                        <td className="border p-2 text-center">{dayName(r.date)}</td>
+                        <td className="border p-2 text-center">{SHIFT_LABELS[r.shift]}</td>
+                        <td className="border p-2 text-center">
+                          {mode === 'worker' ? `עמדה ${r.station}` : r.technicianName}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
+      </main>
+    </div>
+  );
+}
+```
+
+- [ ] **Step 6: Add the 5th nav link**
+
+In `src/app/admin/AdminDashboardClient.tsx`, `src/app/admin/schedule/AdminScheduleClient.tsx`, `src/app/admin/users/AdminUsersClient.tsx`, `src/app/admin/absences/AdminAbsencesClient.tsx`: append `{ href: '/admin/reports', label: 'דוחות' }` to `ADMIN_LINKS`.
+
+- [ ] **Step 7: Verify**
+
+Run: `npm test` → all passing. Run: `npm run build` → success (/admin/reports present).
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add src/app/api/admin/reports src/app/admin tests/reports-routes.test.ts
+git commit -m "feat: reports - per-worker and per-machine shift history from published schedules"
+```
+
+---
+
+### Task 16: Deploy to Vercel + Neon (guided, interactive)
 
 **Files:**
 - Modify: `prisma/schema.prisma` (provider), `.env` (local stays SQLite? No — switch dev to Neon too, or keep two: see steps)
