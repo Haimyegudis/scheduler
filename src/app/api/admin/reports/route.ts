@@ -14,16 +14,19 @@ export async function GET(req: Request) {
   }
   const rows = await prisma.assignment.findMany({
     where: { date: { gte: from, lte: to }, schedule: { status: 'published' } },
-    include: { technician: { select: { name: true } } },
-    orderBy: [{ date: 'asc' }, { shift: 'asc' }, { station: 'asc' }],
+    include: { technician: { select: { name: true } }, station: { select: { name: true } } },
+    orderBy: [{ date: 'asc' }, { shift: 'asc' }, { station: { position: 'asc' } }],
   });
   return Response.json({
     assignments: rows.map(a => ({
       date: a.date,
       shift: a.shift,
-      station: a.station,
+      stationId: a.stationId,
+      stationName: a.station.name,
       technicianId: a.technicianId,
-      technicianName: a.technician.name,
+      technicianName: a.technician?.name ?? null,
+      experimenter: a.experimenter,
+      note: a.note,
     })),
   });
 }

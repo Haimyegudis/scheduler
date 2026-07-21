@@ -1,11 +1,20 @@
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { weekDates, weekStartOf } from '@/lib/dates';
+import { isValidCellColor } from '@/lib/cellColors';
 
 interface SaveBody {
   weekStart?: string;
   includeFriday?: boolean;
-  assignments?: Array<{ date: string; shift: string; station: number; technicianId: number }>;
+  assignments?: Array<{
+    date: string;
+    shift: string;
+    stationId: number;
+    technicianId: number | null;
+    experimenter?: string | null;
+    note?: string | null;
+    color?: string | null;
+  }>;
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -25,18 +34,31 @@ export async function PUT(req: Request) {
       typeof a?.date === 'string' &&
       /^\d{4}-\d{2}-\d{2}$/.test(a.date) &&
       (a.shift === 'morning' || a.shift === 'evening') &&
-      Number.isInteger(a.station) &&
-      a.station >= 1 &&
-      a.station <= 4 &&
-      Number.isInteger(a.technicianId)
+      Number.isInteger(a.stationId) &&
+      (a.technicianId === null || Number.isInteger(a.technicianId)) &&
+      (a.experimenter === undefined || a.experimenter === null || typeof a.experimenter === 'string') &&
+      (a.note === undefined || a.note === null || typeof a.note === 'string') &&
+      isValidCellColor(a.color)
   );
   if (!valid) return Response.json({ error: 'נתוני שיבוץ לא תקינים' }, { status: 400 });
 
   const validDates = new Set(weekDates(weekStart, includeFriday));
   assignments = assignments.filter(a => validDates.has(a.date));
 
-  if (assignments.length > 0) {
-    const assignDates = [...new Set(assignments.map(a => a.date))].sort();
+  const stationIds = [...new Set(assignments.map(a => a.stationId))];
+  if (stationIds.length > 0) {
+    const existingStations = await prisma.station.findMany({
+      where: { id: { in: stationIds } },
+      select: { id: true },
+    });
+    if (existingStations.length !== stationIds.length) {
+      return Response.json({ error: 'נתוני שיבוץ לא תקינים' }, { status: 400 });
+    }
+  }
+
+  const assignedRows = assignments.filter((a): a is typeof a & { technicianId: number } => a.technicianId !== null);
+  if (assignedRows.length > 0) {
+    const assignDates = [...new Set(assignedRows.map(a => a.date))].sort();
     const [offRows, absenceRows] = await Promise.all([
       prisma.constraint.findMany({ where: { date: { in: assignDates }, value: 'off' } }),
       prisma.absence.findMany({
@@ -47,7 +69,7 @@ export async function PUT(req: Request) {
       }),
     ]);
     const offSet = new Set(offRows.map(c => `${c.technicianId}|${c.date}`));
-    const blocked = assignments.some(
+    const blocked = assignedRows.some(
       a =>
         offSet.has(`${a.technicianId}|${a.date}`) ||
         absenceRows.some(
@@ -67,7 +89,16 @@ export async function PUT(req: Request) {
   await prisma.$transaction([
     prisma.assignment.deleteMany({ where: { scheduleId: schedule.id } }),
     prisma.assignment.createMany({
-      data: assignments.map(a => ({ scheduleId: schedule.id, ...a })),
+      data: assignments.map(a => ({
+        scheduleId: schedule.id,
+        date: a.date,
+        shift: a.shift,
+        stationId: a.stationId,
+        technicianId: a.technicianId,
+        experimenter: a.experimenter,
+        note: a.note,
+        color: a.color,
+      })),
     }),
   ]);
   return Response.json({ ok: true });

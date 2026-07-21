@@ -7,7 +7,7 @@ import { PUT as saveSchedule } from '@/app/api/admin/schedule/route';
 import { POST as generate } from '@/app/api/admin/schedule/generate/route';
 import { POST as publish } from '@/app/api/admin/schedule/publish/route';
 import { GET as listEmails, POST as addEmail, DELETE as removeEmail } from '@/app/api/admin/allowed-emails/route';
-import { GET as listUsers, PUT as setUserAdmin } from '@/app/api/admin/users/route';
+import { GET as listUsers, PUT as setUserAdmin, DELETE as deleteUser } from '@/app/api/admin/users/route';
 
 const WEEK = '2026-07-19';
 const DATES = ['2026-07-19', '2026-07-20', '2026-07-21', '2026-07-22', '2026-07-23'];
@@ -27,10 +27,12 @@ async function techReq(url: string, techId: number): Promise<Request> {
 }
 
 let techIds: number[];
+let stationIds: number[];
 
 beforeEach(async () => {
   await prisma.technician.deleteMany();
   await prisma.schedule.deleteMany();
+  await prisma.station.deleteMany();
   techIds = [];
   for (let i = 1; i <= 10; i++) {
     const t = await prisma.technician.create({
@@ -44,11 +46,17 @@ beforeEach(async () => {
       }
     }
   }
+  stationIds = [];
+  for (let i = 1; i <= 4; i++) {
+    const s = await prisma.station.create({ data: { name: `עמדה ${i}`, position: i } });
+    stationIds.push(s.id);
+  }
 });
 
 afterEach(async () => {
   await prisma.technician.deleteMany();
   await prisma.schedule.deleteMany();
+  await prisma.station.deleteMany();
 });
 
 test('admin routes reject non-admin sessions', async () => {
@@ -89,6 +97,23 @@ test('generate creates a full draft respecting hard rules', async () => {
   }
 });
 
+test('generate only fills active stations, ignoring inactive ones', async () => {
+  await prisma.station.update({ where: { id: stationIds[3] }, data: { active: false } });
+  const res = await generate(await adminReq('POST', '/x', { weekStart: WEEK, includeFriday: false }));
+  expect(res.status).toBe(200);
+  const schedule = await prisma.schedule.findUnique({ where: { weekStart: WEEK }, include: { assignments: true } });
+  expect(schedule!.assignments).toHaveLength(30); // 5 days * 2 shifts * 3 active stations
+  expect(schedule!.assignments.every(a => a.stationId !== stationIds[3])).toBe(true);
+});
+
+test('generate with no active stations produces an empty schedule', async () => {
+  await prisma.station.updateMany({ data: { active: false } });
+  const res = await generate(await adminReq('POST', '/x', { weekStart: WEEK, includeFriday: false }));
+  expect(res.status).toBe(200);
+  const schedule = await prisma.schedule.findUnique({ where: { weekStart: WEEK }, include: { assignments: true } });
+  expect(schedule!.assignments).toHaveLength(0);
+});
+
 test('generate regenerates (replaces) an existing draft', async () => {
   await generate(await adminReq('POST', '/x', { weekStart: WEEK, includeFriday: false }));
   await generate(await adminReq('POST', '/x', { weekStart: WEEK, includeFriday: false }));
@@ -100,7 +125,7 @@ test('save schedule replaces assignments and persists includeFriday', async () =
   const res = await saveSchedule(await adminReq('PUT', '/x', {
     weekStart: WEEK,
     includeFriday: true,
-    assignments: [{ date: DATES[0], shift: 'morning', station: 1, technicianId: techIds[0] }],
+    assignments: [{ date: DATES[0], shift: 'morning', stationId: stationIds[0], technicianId: techIds[0] }],
   }));
   expect(res.status).toBe(200);
   const schedule = await prisma.schedule.findUnique({ where: { weekStart: WEEK }, include: { assignments: true } });
@@ -114,8 +139,8 @@ test('save schedule drops assignments outside the active week days', async () =>
     weekStart: WEEK,
     includeFriday: false,
     assignments: [
-      { date: DATES[0], shift: 'morning', station: 1, technicianId: techIds[0] },
-      { date: '2026-07-24', shift: 'morning', station: 1, technicianId: techIds[1] }, // Friday while includeFriday=false
+      { date: DATES[0], shift: 'morning', stationId: stationIds[0], technicianId: techIds[0] },
+      { date: '2026-07-24', shift: 'morning', stationId: stationIds[0], technicianId: techIds[1] }, // Friday while includeFriday=false
     ],
   }));
   expect(res.status).toBe(200);
@@ -128,7 +153,43 @@ test('save schedule rejects malformed assignment objects with 400', async () => 
   const res = await saveSchedule(await adminReq('PUT', '/x', {
     weekStart: WEEK,
     includeFriday: false,
-    assignments: [{ date: DATES[0], shift: 'night', station: 9, technicianId: 'x' }],
+    assignments: [{ date: DATES[0], shift: 'night', stationId: 'nope', technicianId: 'x' }],
+  }));
+  expect(res.status).toBe(400);
+});
+
+test('save schedule accepts a row with technicianId null when experimenter or note is present', async () => {
+  const res = await saveSchedule(await adminReq('PUT', '/x', {
+    weekStart: WEEK,
+    includeFriday: false,
+    assignments: [
+      { date: DATES[0], shift: 'morning', stationId: stationIds[0], technicianId: null, experimenter: 'ד"ר כהן' },
+      { date: DATES[0], shift: 'evening', stationId: stationIds[1], technicianId: null, note: 'תחזוקה' },
+    ],
+  }));
+  expect(res.status).toBe(200);
+  const schedule = await prisma.schedule.findUnique({ where: { weekStart: WEEK }, include: { assignments: true } });
+  expect(schedule!.assignments).toHaveLength(2);
+  expect(schedule!.assignments.find(a => a.shift === 'morning')).toMatchObject({
+    technicianId: null,
+    experimenter: 'ד"ר כהן',
+  });
+  expect(schedule!.assignments.find(a => a.shift === 'evening')).toMatchObject({
+    technicianId: null,
+    note: 'תחזוקה',
+  });
+});
+
+test('save schedule still blocks off/absent technicians when technicianId is set', async () => {
+  await prisma.constraint.upsert({
+    where: { technicianId_date: { technicianId: techIds[0], date: DATES[0] } },
+    update: { value: 'off' },
+    create: { technicianId: techIds[0], date: DATES[0], value: 'off' },
+  });
+  const res = await saveSchedule(await adminReq('PUT', '/x', {
+    weekStart: WEEK,
+    includeFriday: false,
+    assignments: [{ date: DATES[0], shift: 'morning', stationId: stationIds[0], technicianId: techIds[0] }],
   }));
   expect(res.status).toBe(400);
 });
@@ -150,6 +211,22 @@ test('technician sees schedule only after publish; admin always', async () => {
   expect(data.schedule.status).toBe('published');
   expect(data.schedule.assignments).toHaveLength(40);
   expect(data.technicians.length).toBe(10);
+});
+
+test('GET /api/schedule still includes a station referenced by assignments after it is deactivated', async () => {
+  const res = await saveSchedule(await adminReq('PUT', '/x', {
+    weekStart: WEEK,
+    includeFriday: false,
+    assignments: [{ date: DATES[0], shift: 'morning', stationId: stationIds[0], technicianId: techIds[0] }],
+  }));
+  expect(res.status).toBe(200);
+
+  await prisma.station.update({ where: { id: stationIds[0] }, data: { active: false } });
+
+  const view = await getSchedule(await adminReq('GET', `/api/schedule?weekStart=${WEEK}`));
+  expect(view.status).toBe(200);
+  const data = await view.json();
+  expect(data.stations.map((s: { id: number }) => s.id)).toContain(stationIds[0]);
 });
 
 test('publish 404s when no schedule exists', async () => {
@@ -195,4 +272,102 @@ test('users: list all, toggle admin, refuse self-change', async () => {
   expect((await prisma.technician.findUnique({ where: { id: target } }))!.isAdmin).toBe(true);
   expect((await setUserAdmin(await adminReq('PUT', '/x', { userId: me.id, isAdmin: false }, me.id))).status).toBe(400);
   expect((await setUserAdmin(await adminReq('PUT', '/x', { userId: 123456, isAdmin: true }, me.id))).status).toBe(404);
+});
+
+test('delete user: rejects non-admin, refuses self-delete, 404s unknown user', async () => {
+  const me = await prisma.technician.create({
+    data: { name: 'אני', email: 'me2@x.com', passwordHash: 'x', isAdmin: true },
+  });
+  const nonAdminToken = await createSessionToken({ userId: techIds[0], role: 'technician', name: 'טק' });
+  const nonAdminDelete = new Request('http://test/x', {
+    method: 'DELETE',
+    headers: { cookie: `session=${nonAdminToken}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ userId: techIds[1] }),
+  });
+  expect((await deleteUser(nonAdminDelete)).status).toBe(403);
+  expect((await deleteUser(await adminReq('DELETE', '/x', { userId: me.id }, me.id))).status).toBe(400);
+  expect((await deleteUser(await adminReq('DELETE', '/x', { userId: 999999 }, me.id))).status).toBe(404);
+});
+
+test('delete user removes the technician and cascades constraints, absences, and assignments', async () => {
+  const me = await prisma.technician.create({
+    data: { name: 'אני', email: 'me3@x.com', passwordHash: 'x', isAdmin: true },
+  });
+  const target = techIds[0];
+  await prisma.absence.create({ data: { technicianId: target, startDate: DATES[0], endDate: DATES[0], type: 'sick' } });
+  const schedule = await prisma.schedule.create({ data: { weekStart: WEEK, status: 'draft' } });
+  await prisma.assignment.create({
+    data: { scheduleId: schedule.id, date: DATES[0], shift: 'morning', stationId: stationIds[0], technicianId: target },
+  });
+
+  const res = await deleteUser(await adminReq('DELETE', '/x', { userId: target }, me.id));
+  expect(res.status).toBe(200);
+
+  expect(await prisma.technician.findUnique({ where: { id: target } })).toBeNull();
+  expect(await prisma.constraint.findMany({ where: { technicianId: target } })).toHaveLength(0);
+  expect(await prisma.absence.findMany({ where: { technicianId: target } })).toHaveLength(0);
+  expect(await prisma.assignment.findMany({ where: { technicianId: target } })).toHaveLength(0);
+});
+
+test('save schedule accepts a preset color token on a cell, with or without a technician', async () => {
+  const res = await saveSchedule(await adminReq('PUT', '/x', {
+    weekStart: WEEK,
+    includeFriday: false,
+    assignments: [
+      { date: DATES[0], shift: 'morning', stationId: stationIds[0], technicianId: techIds[0], color: 'blue' },
+      { date: DATES[0], shift: 'evening', stationId: stationIds[1], technicianId: null, color: 'green' },
+    ],
+  }));
+  expect(res.status).toBe(200);
+  const schedule = await prisma.schedule.findUnique({ where: { weekStart: WEEK }, include: { assignments: true } });
+  expect(schedule!.assignments).toHaveLength(2);
+  expect(schedule!.assignments.find(a => a.shift === 'morning')).toMatchObject({ technicianId: techIds[0], color: 'blue' });
+  expect(schedule!.assignments.find(a => a.shift === 'evening')).toMatchObject({ technicianId: null, color: 'green' });
+});
+
+test('save schedule rejects a color that is not a known preset token', async () => {
+  const res = await saveSchedule(await adminReq('PUT', '/x', {
+    weekStart: WEEK,
+    includeFriday: false,
+    assignments: [{ date: DATES[0], shift: 'morning', stationId: stationIds[0], technicianId: null, color: 'magenta' }],
+  }));
+  expect(res.status).toBe(400);
+});
+
+test('save schedule rejects an assignment referencing a station that does not exist', async () => {
+  const res = await saveSchedule(await adminReq('PUT', '/x', {
+    weekStart: WEEK,
+    includeFriday: false,
+    assignments: [{ date: DATES[0], shift: 'morning', stationId: 999999, technicianId: techIds[0] }],
+  }));
+  expect(res.status).toBe(400);
+  const schedule = await prisma.schedule.findUnique({ where: { weekStart: WEEK } });
+  expect(schedule).toBeNull();
+});
+
+test('save schedule strips unknown keys from assignment rows before writing', async () => {
+  const res = await saveSchedule(await adminReq('PUT', '/x', {
+    weekStart: WEEK,
+    includeFriday: false,
+    assignments: [
+      {
+        date: DATES[0],
+        shift: 'morning',
+        stationId: stationIds[0],
+        technicianId: techIds[0],
+        id: 999999,
+        scheduleId: 999999,
+        evil: 'DROP TABLE',
+      },
+    ],
+  }));
+  expect(res.status).toBe(200);
+  const schedule = await prisma.schedule.findUnique({ where: { weekStart: WEEK }, include: { assignments: true } });
+  expect(schedule!.assignments).toHaveLength(1);
+  const row = schedule!.assignments[0] as unknown as Record<string, unknown>;
+  expect(row.stationId).toBe(stationIds[0]);
+  expect(row.technicianId).toBe(techIds[0]);
+  expect(row.id).not.toBe(999999);
+  expect(row.scheduleId).toBe(schedule!.id);
+  expect(row.evil).toBeUndefined();
 });

@@ -67,3 +67,21 @@ export async function PUT(req: Request) {
   });
   return Response.json({ ok: true });
 }
+
+export async function DELETE(req: Request) {
+  const session = await getSession(req);
+  if (!session || session.role !== 'technician') {
+    return Response.json({ error: 'נדרשת התחברות' }, { status: 401 });
+  }
+  const body = await req.json().catch(() => ({}));
+  const { date } = body as { date?: string };
+  if (!date || !DATE_RE.test(date)) {
+    return Response.json({ error: 'נתונים לא תקינים' }, { status: 400 });
+  }
+  const schedule = await prisma.schedule.findUnique({ where: { weekStart: weekStartOf(date) } });
+  if (schedule?.status === 'published') {
+    return Response.json({ error: 'התוכנית לשבוע זה כבר פורסמה — לא ניתן לשנות אילוצים' }, { status: 409 });
+  }
+  await prisma.constraint.deleteMany({ where: { technicianId: session.userId!, date } });
+  return Response.json({ ok: true });
+}

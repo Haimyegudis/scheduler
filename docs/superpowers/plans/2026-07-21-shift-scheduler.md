@@ -4050,6 +4050,110 @@ git commit -m "feat: bilingual UI - Hebrew/English with RTL/LTR switching"
 
 ---
 
+### Task 18: Named stations, cell notes, experimenter slot
+
+**Decisions (user-approved):** global station list managed by admin (add/rename/deactivate, ordered); experimenter is free text per cell; a cell can hold a note and/or experimenter even without a technician.
+
+**Schema (breaking; prod DB is empty — new DDL will be run manually in Neon):**
+```prisma
+model Station {
+  id          Int          @id @default(autoincrement())
+  name        String
+  position    Int
+  active      Boolean      @default(true)
+  assignments Assignment[]
+}
+
+model Assignment {
+  id           Int         @id @default(autoincrement())
+  scheduleId   Int
+  schedule     Schedule    @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  date         String
+  shift        String
+  stationId    Int
+  station      Station     @relation(fields: [stationId], references: [id])
+  technicianId Int?
+  technician   Technician? @relation(fields: [technicianId], references: [id], onDelete: Cascade)
+  experimenter String?
+  note         String?
+
+  @@unique([scheduleId, date, shift, stationId])
+}
+```
+
+**Behavior:**
+- `generateAssignments(dates, techs, stationIds)` — stations param replaces the fixed 1-4; fills each active station per shift, same rules/balancing. Emits `{date, shift, stationId, technicianId}`.
+- `GET/POST/PUT/DELETE /api/admin/stations` — list (ordered by position; include inactive with flag), create {name}, update {id, name?, active?, position?}, delete only if never referenced by an assignment else deactivate (or simply: PUT with active:false; DELETE returns 409 if referenced). Admin only, Hebrew errors.
+- Schedule GET/PUT payloads: cells keyed by stationId; each assignment row may carry technicianId (nullable), experimenter, note. Manual save accepts rows with technicianId null when experimenter or note present; hard-block (off/absent) applies only when technicianId set.
+- Board UI: per cell — technician select + experimenter text input + note text input (compact; the Task 20 redesign will restyle). Stations management panel on the board page (collapsible): list stations with rename inline, add, deactivate/activate; order by position.
+- Technician published view (ScheduleTable): station rows use station names; show experimenter (labeled) and note under the technician name when present; cell with no technician AND no experimenter → light red background with NO text.
+- Reports: by-machine mode uses the station list (names); vacation summary unchanged.
+- Overview unchanged.
+- Update all affected tests (scheduler stations param, admin routes stationId payloads, new stations CRUD tests, reports).
+- If no active stations exist, board shows a hint to add stations; generate produces nothing.
+
+Steps: TDD where logic changes (scheduler, routes); full suite + build green; commit.
+
+---
+
+### Task 19: Multi-select constraints UI, English default, empty-cell styling
+
+- Constraints screen: per-day toggle buttons **Morning / Evening / Off** (multi-select behavior): Morning only → 'morning'; Evening only → 'evening'; both → 'flex'; Off exclusive → 'off'; clearing all → delete/no constraint (treat as not filled — PUT stays per-day single value; compute value client-side). Show existing values mapped back (flex → both toggles on).
+- Default language becomes **English**: layout `getLang` fallback 'en'; everything else already works. RTL only when cookie says 'he'.
+- Published/technician ScheduleTable + admin board: empty cell (no technician, no experimenter) renders empty with light red background — no "ריק"/"—" text (board's select keeps an empty option for clearing but styled as blank).
+- Board dropdown availability indication: each selectable technician's option text shows their request for that day — "Name · בוקר/ערב/בוקר+ערב" (i18n: Morning/Evening/Both); unfilled shows "Name · ?"; options ordered: exact-shift match first, then flex (both), then unfilled/mismatch. Off/absent remain excluded (hard block, unchanged).
+- **Delete users:** `DELETE /api/admin/users` `{userId}` — admin only; 400 when `userId === session.userId` (cannot delete self); 404 unknown; deletes the user (relations cascade: constraints, absences, assignments). Users page gets a delete button per row (hidden/disabled on own row) with a confirm dialog warning that the user's history is removed too. i18n strings in both dictionaries. TDD the route.
+- **Cell highlighting colors:** add `color String?` to the Assignment model (cell record may exist with only a color — technicianId already nullable; update both neon SQL files). Board: a palette popover per cell (8 preset colors + clear) plus row-level (station×shift across the week) and column-level (whole day) apply/clear actions; colored cells render with that background tint on the board, in the technician's published view, and in the copied-to-Outlook HTML (inline styles). Save flows through the existing draft-save payload (`color` per cell). Preset palette tokens map to Tailwind-safe classes/inline hex; i18n for the palette UI strings.
+- **Copy schedule for Outlook:** board gets a "Copy schedule" button — builds an HTML `<table>` of the current week (days × shifts × station names, cell = technician name + experimenter + note; empty cells blank with light-red background inline style) and writes it to the clipboard via `navigator.clipboard.write` with a `ClipboardItem` containing both `text/html` and a plain-text fallback, so pasting into Outlook keeps the table. Success/failure toast message, i18n both languages.
+- Update tests if any assert Hebrew default; full suite + build green; commit.
+
+---
+
+### Task 21: Technician "My Vacations" page (current year)
+
+- `GET /api/my-vacations` (technician role only, 401 otherwise): server computes the CURRENT year (UTC) and returns `{ year, summary: {vacation, sick, miluim, other, offMarked, total}, absences: [{id, startDate, endDate, type}] }` for the logged-in technician only — same day-counting/clipping logic as vacation-summary (extract a shared helper in `src/lib` rather than duplicating). Strictly current year: no year parameter accepted.
+- New page `/vacations` (technician guard like /constraints): summary chips + detail list of absence ranges with type labels + off-marked count; empty state text. All strings via i18n dictionaries (he+en).
+- TECH_LINKS in technician clients gains a third link `/vacations` ("החופשים שלי" / "My Vacations").
+- TDD for the API; suite + build green; commit.
+
+---
+
+### Task 22: PWA + Web Push notifications on publish
+
+- **PWA:** `public/manifest.json` (name, icons from logo.png, standalone display, theme color HP cyan), linked in layout metadata; minimal `public/sw.js` service worker handling `push` (show notification: title/body from payload, icon logo, click opens site root) and `notificationclick`. Register the SW from a small client component in the layout.
+- **Schema:** `model PushSubscription { id, technicianId (FK cascade), endpoint String @unique, p256dh String, auth String, createdAt }` — include in both neon SQL files.
+- **Server:** `web-push` npm package. Env: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (mailto:). `src/lib/push.ts`: `sendPushToAll(payload)` — loads all subscriptions, sends, deletes subscriptions that return 404/410; never throws (log and continue).
+- **API:** `GET /api/push/public-key` (any logged-in) → `{ key }`; `POST /api/push/subscribe` (logged-in) stores/upserts the browser subscription for the session user; `DELETE /api/push/subscribe` removes by endpoint.
+- **Publish hook:** `POST /api/admin/schedule/publish` calls `sendPushToAll` (fire-and-forget with await but errors swallowed) with a bilingual-safe payload (Hebrew+English line: "פורסמה תוכנית משמרות חדשה / New shift schedule published").
+- **Client UX:** a small "Enable notifications" bell button in NavBar (visible when Notification.permission !== 'granted' and push supported); requests permission, subscribes with the public key, POSTs subscription; hidden once granted+subscribed. i18n strings both languages.
+- **Tests:** subscribe/unsubscribe route TDD (auth, upsert by endpoint); publish route test asserting it still publishes when push sending fails (no subscriptions / bad keys). Don't test real push delivery.
+- Missing VAPID env vars: push endpoints return 503-with-Hebrew-error, publish continues fine; document keys generation in README (`npx web-push generate-vapid-keys`) and Vercel env setup.
+- Suite + build green; commit.
+
+---
+
+### Task 23: Android TWA app (Bubblewrap, WorkDiary recipe)
+
+Prereq: Task 22's PWA live in production. Follow C:\APPS\WorkDiary\android-twa\README.md verbatim — the toolchain (JDK 17, Android SDK, bubblewrap config at %USERPROFILE%\.bubblewrap) is already installed on this machine.
+
+- Task 22 must also serve: `public/manifest.webmanifest`-compatible manifest (or manifest.json — match what the TWA points to), a 512×512 icon (`public/pwa-512.png`, generated from logo.png), and `public/.well-known/assetlinks.json` (cert SHA-256 filled in during this task).
+- Create `android-twa/` in this repo: `twa-manifest.json` — packageId `com.hpindigo.scheduler`, host `scheduler-theta-seven.vercel.app`, name "HP Indigo Scheduler" / launcherName "Scheduler", themeColor HP cyan `#0aa8dc`, enableNotifications true, portrait, signingKey path `C:\APPS\keys\scheduler-twa.keystore` (alias `scheduler`).
+- Generate a NEW keystore (`keytool`), save credentials to `C:\APPS\keys\scheduler-twa-credentials.txt` (NOT in repo), extract cert SHA-256 → put into `public/.well-known/assetlinks.json` → deploy site first, then build.
+- Build per WorkDiary README incl. its two gotchas (jcenter→mavenCentral, PATH for gradlew) → deliverable `app-release-signed.apk` for sideload; write an android-twa/README.md adapted from WorkDiary's.
+- Add a repo docs note: rebuild only on identity change; site deploys update the app automatically.
+
+---
+
+### Task 20: Modern UI redesign (frontend-design)
+
+- Invoke the frontend-design skill FIRST and follow it.
+- Full visual overhaul of every screen: cohesive design system on the HP Indigo cyan brand (#0aa8dc family), modern typography, cards/tables with depth and hover states, better spacing/hierarchy, polished buttons/inputs/selects, smooth transitions, refined mobile layouts, distinctive login screen. Dark-mode NOT required.
+- Zero logic changes: only className/markup/CSS (globals.css, tailwind utilities, small presentational components allowed).
+- Both languages and both directions (RTL/LTR) must look right.
+- Full suite + build green; commit.
+
+---
+
 ### Task 17: Deploy to Vercel + Neon (guided, interactive)
 
 **Files:**

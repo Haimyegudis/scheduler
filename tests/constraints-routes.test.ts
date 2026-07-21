@@ -1,7 +1,7 @@
 import { test, expect, beforeEach } from 'vitest';
 import { prisma } from '@/lib/db';
 import { createSessionToken } from '@/lib/auth';
-import { GET, PUT } from '@/app/api/constraints/route';
+import { GET, PUT, DELETE } from '@/app/api/constraints/route';
 
 const WEEK = '2026-07-19';
 
@@ -57,4 +57,32 @@ test('PUT rejects when week schedule is published', async () => {
 
 test('requires technician session', async () => {
   expect((await GET(new Request(`http://test/api/constraints?weekStart=${WEEK}`))).status).toBe(401);
+});
+
+test('DELETE clears a constraint (clearing all toggles => no constraint)', async () => {
+  await PUT(await techRequest('PUT', '/x', techId, { date: '2026-07-20', value: 'flex' }));
+  const del = await DELETE(await techRequest('DELETE', '/x', techId, { date: '2026-07-20' }));
+  expect(del.status).toBe(200);
+  const res = await GET(await techRequest('GET', `/api/constraints?weekStart=${WEEK}`, techId));
+  expect((await res.json()).constraints['2026-07-20']).toBeUndefined();
+});
+
+test('DELETE is a no-op (still 200) when no constraint exists for that day', async () => {
+  const del = await DELETE(await techRequest('DELETE', '/x', techId, { date: '2026-07-20' }));
+  expect(del.status).toBe(200);
+});
+
+test('DELETE rejects invalid or missing date with 400', async () => {
+  expect((await DELETE(await techRequest('DELETE', '/x', techId, { date: 'nope' }))).status).toBe(400);
+  expect((await DELETE(await techRequest('DELETE', '/x', techId, {}))).status).toBe(400);
+});
+
+test('DELETE rejects when week schedule is published', async () => {
+  await prisma.schedule.create({ data: { weekStart: WEEK, status: 'published' } });
+  const res = await DELETE(await techRequest('DELETE', '/x', techId, { date: '2026-07-20' }));
+  expect(res.status).toBe(409);
+});
+
+test('DELETE requires technician session', async () => {
+  expect((await DELETE(new Request('http://test/api/constraints', { method: 'DELETE' }))).status).toBe(401);
 });

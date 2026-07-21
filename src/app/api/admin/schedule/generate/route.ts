@@ -16,6 +16,7 @@ export async function POST(req: Request) {
 
   const dates = weekDates(weekStart, includeFriday);
   const technicians = await prisma.technician.findMany({ where: { isAdmin: false }, select: { id: true } });
+  const stations = await prisma.station.findMany({ where: { active: true }, orderBy: { position: 'asc' } });
   const rows = await prisma.constraint.findMany({ where: { date: { in: dates } } });
 
   const constraintsByTech = new Map<number, Record<string, ConstraintValue>>();
@@ -35,7 +36,8 @@ export async function POST(req: Request) {
   }
   const assignments = generateAssignments(
     dates,
-    technicians.map(t => ({ technicianId: t.id, constraints: constraintsByTech.get(t.id) ?? {} }))
+    technicians.map(t => ({ technicianId: t.id, constraints: constraintsByTech.get(t.id) ?? {} })),
+    stations.map(s => s.id)
   );
 
   const schedule = await prisma.schedule.upsert({

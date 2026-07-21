@@ -3,6 +3,7 @@
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useT, LangToggle } from '@/lib/i18n';
+import NotificationBell from '@/components/NotificationBell';
 
 export default function NavBar({
   name,
@@ -22,26 +23,29 @@ export default function NavBar({
   }
 
   return (
-    <header className="bg-white border-b px-4 py-3 flex items-center gap-4 flex-wrap">
-      <span className="flex items-center gap-2 font-bold">
-        <img src="/logo.png" alt="HP Indigo" className="h-8 w-auto rounded" />
-        {t('appTitle')}
-      </span>
-      <nav className="flex gap-3">
-        {links.map(l => (
-          <Link
-            key={l.href}
-            href={l.href}
-            className={`px-2 py-1 rounded ${pathname === l.href ? 'bg-blue-100 text-blue-800' : 'text-gray-600 hover:bg-gray-100'}`}
-          >
-            {l.label}
-          </Link>
-        ))}
-      </nav>
-      <div className="ms-auto flex items-center gap-3 text-sm">
-        <span className="text-gray-500">{t('hello')} {name}</span>
-        <button onClick={logout} className="text-red-600 hover:underline">{t('logout')}</button>
-        <LangToggle />
+    <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/85 px-4 py-3 backdrop-blur-md supports-[backdrop-filter]:bg-white/70">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2">
+        <span className="flex items-center gap-2.5 font-bold text-slate-900">
+          <img src="/logo.png" alt="HP Indigo" className="h-8 w-auto rounded-lg shadow-sm" />
+          <span className="hidden sm:inline">{t('appTitle')}</span>
+        </span>
+        <nav className="flex flex-wrap items-center gap-1">
+          {links.map(l => (
+            <Link key={l.href} href={l.href} className={pathname === l.href ? 'nav-link-active' : 'nav-link'}>
+              {l.label}
+            </Link>
+          ))}
+        </nav>
+        <div className="ms-auto flex items-center gap-3 text-sm">
+          <NotificationBell />
+          <span className="hidden text-slate-500 md:inline">
+            {t('hello')} <span className="font-medium text-slate-700">{name}</span>
+          </span>
+          <button onClick={logout} className="link-danger text-sm">
+            {t('logout')}
+          </button>
+          <LangToggle />
+        </div>
       </div>
     </header>
   );

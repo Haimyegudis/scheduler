@@ -36,10 +36,47 @@ Without this, Prisma engine downloads and database pushes can fail silently or w
 
 ## Environment variables
 
-| Variable       | Description                                                            |
-| -------------- | ------------------------------------------------------------------------ |
-| `DATABASE_URL` | Connection string for the database (SQLite file path locally, Postgres/Neon URL in production). |
-| `JWT_SECRET`   | Secret used to sign/verify session JWTs. Use a long random value in production. |
+| Variable            | Description                                                            |
+| -------------------- | ------------------------------------------------------------------------ |
+| `DATABASE_URL`       | Connection string for the database (SQLite file path locally, Postgres/Neon URL in production). |
+| `JWT_SECRET`         | Secret used to sign/verify session JWTs. Use a long random value in production. |
+| `VAPID_PUBLIC_KEY`   | Public VAPID key for Web Push. See [Push notifications](#push-notifications-pwa) below. |
+| `VAPID_PRIVATE_KEY`  | Private VAPID key for Web Push. Keep secret, never commit it.            |
+| `VAPID_SUBJECT`      | Contact URI for Web Push, e.g. `mailto:admin@example.com`.               |
+
+## Push notifications (PWA)
+
+The app is an installable PWA (`public/manifest.json`, `public/sw.js`) and sends a Web Push notification to
+subscribed browsers whenever an admin publishes a schedule (`POST /api/admin/schedule/publish`). Publishing
+always succeeds even if push delivery fails or no VAPID keys are configured — push is best-effort and never
+blocks the publish action.
+
+Each environment (local dev, production) needs its **own** VAPID key pair. Generate one with:
+
+```bash
+npx web-push generate-vapid-keys
+```
+
+This prints a public/private key pair. Set them locally in `.env` (not committed) as `VAPID_PUBLIC_KEY`,
+`VAPID_PRIVATE_KEY`, and `VAPID_SUBJECT` (a `mailto:` URI). In Vercel, add the same three variables under
+Project Settings → Environment Variables for the production environment, using a **freshly generated** key pair
+(do not reuse the local dev keys in production).
+
+If `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/`VAPID_SUBJECT` are not all set, `GET /api/push/public-key` and
+`POST /api/push/subscribe` respond with `503` and a Hebrew error message, and the notification bell in the nav
+bar will simply fail to enable notifications — the rest of the app is unaffected.
+
+### PWA icons
+
+`public/pwa-192.png` and `public/pwa-512.png` are generated from `public/logo.png` via `scripts/gen-pwa-icons.js`
+(uses the `sharp` devDependency). Re-run it after changing the logo:
+
+```bash
+node scripts/gen-pwa-icons.js
+```
+
+`public/.well-known/assetlinks.json` contains the real package name and SHA-256 signing fingerprint for the
+Android TWA wrapper (Task 23), enabling Digital Asset Links verification for the app.
 
 ## Database provider: SQLite (dev) vs Postgres (production)
 

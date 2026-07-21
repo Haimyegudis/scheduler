@@ -27,3 +27,21 @@ export async function PUT(req: Request) {
   await prisma.technician.update({ where: { id: userId }, data: { isAdmin } });
   return Response.json({ ok: true });
 }
+
+export async function DELETE(req: Request) {
+  const session = await getSession(req);
+  if (session?.role !== 'admin') return Response.json({ error: 'אין הרשאה' }, { status: 403 });
+  const body = (await req.json().catch(() => ({}))) as { userId?: number };
+  const { userId } = body;
+  if (typeof userId !== 'number') {
+    return Response.json({ error: 'נתונים לא תקינים' }, { status: 400 });
+  }
+  if (userId === session.userId) {
+    return Response.json({ error: 'לא ניתן למחוק את עצמך' }, { status: 400 });
+  }
+  const user = await prisma.technician.findUnique({ where: { id: userId } });
+  if (!user) return Response.json({ error: 'משתמש לא נמצא' }, { status: 404 });
+  // Constraints, absences, and assignments cascade via onDelete: Cascade on their FK to Technician.
+  await prisma.technician.delete({ where: { id: userId } });
+  return Response.json({ ok: true });
+}

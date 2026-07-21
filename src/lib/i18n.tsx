@@ -43,7 +43,10 @@ export function LangToggle({ className }: { className?: string }) {
       type="button"
       onClick={() => setLang(lang === 'he' ? 'en' : 'he')}
       aria-label="Toggle language"
-      className={className ?? 'text-sm border rounded px-2 py-1 hover:bg-gray-100 shrink-0'}
+      className={
+        className ??
+        'shrink-0 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-500 shadow-sm transition hover:border-brand-300 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2'
+      }
     >
       {lang === 'he' ? 'EN' : 'עב'}
     </button>

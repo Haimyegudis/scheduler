@@ -15,6 +15,7 @@ const he = {
   absencesNav: 'היעדרויות',
   reportsNav: 'דוחות',
   adminName: 'מנהל',
+  myVacationsNav: 'החופשים שלי',
 
   loginTitle: 'התחברות',
   registerTitle: 'הרשמה',
@@ -35,6 +36,8 @@ const he = {
 
   shiftStationHeader: 'משמרת / עמדה',
   stationLabel: 'עמדה',
+  assignTechnicianAria: 'שיבוץ טכנאי לתא',
+  closeLabel: 'סגור',
 
   weekPublishedNotice: 'התוכנית לשבוע זה פורסמה — לא ניתן לשנות אילוצים.',
   loadError: 'שגיאה בטעינת נתונים',
@@ -56,7 +59,7 @@ const he = {
   technicianCol: 'טכנאי',
   statusCol: 'סטטוס',
 
-  generateConfirm: 'יצירת תוכנית תדרוס את השיבוץ הקיים. להמשיך?',
+  generateConfirm: 'יצירת תוכנית תדרוס את השיבוץ הקיים, כולל הערות, נסיינים וצבעים. להמשיך?',
   absentPrefix: 'נעדר:',
   doubleBookedWarning: 'משובץ פעמיים באותו יום',
   constraintPrefix: 'אילוץ:',
@@ -122,6 +125,49 @@ const he = {
   dateCol: 'תאריך',
   dayCol: 'יום',
   shiftCol: 'משמרת',
+
+  experimenterLabel: 'ניסוי',
+  noteLabel: 'הערה',
+  experimenterInputPlaceholder: 'שם המנוסה',
+  noteInputPlaceholder: 'הערה',
+  stationsHeading: 'עמדות',
+  stationNamePlaceholder: 'שם עמדה חדשה',
+  activateBtn: 'הפעל',
+  deactivateBtn: 'השבת',
+  noStationsHint: 'לא הוגדרו עמדות עדיין. הוסף עמדה כדי להתחיל לבנות תוכנית.',
+  noActiveStationsBoardHint: 'אין עמדות פעילות. הוסף עמדה בפאנל הניהול כדי לבנות תוכנית.',
+  stationNameRequired: 'נא להזין שם עמדה',
+  stationDeleteBlocked: 'לא ניתן למחוק עמדה שמשובצת בתוכנית — ניתן להשבית אותה',
+  stationNotFound: 'עמדה לא נמצאה',
+
+  bothShiftsLabel: 'בוקר+ערב',
+  boardUnfilledMark: '?',
+
+  deleteUserBtn: 'מחק',
+  deleteUserConfirmMsg: 'למחוק את המשתמש? כל האילוצים, ההיעדרויות והשיבוצים שלו יימחקו לצמיתות. לא ניתן לבטל פעולה זו.',
+  deleteUserFailed: 'מחיקת המשתמש נכשלה',
+
+  colorPickerLabel: 'צבע תא',
+  clearColorBtn: 'נקה',
+  applyRowColorBtn: 'החל על השורה',
+  clearRowColorBtn: 'נקה מהשורה',
+  applyColumnColorBtn: 'החל על העמודה',
+  clearColumnColorBtn: 'נקה מהעמודה',
+  colorRed: 'אדום',
+  colorOrange: 'כתום',
+  colorYellow: 'צהוב',
+  colorGreen: 'ירוק',
+  colorTeal: 'טורקיז',
+  colorBlue: 'כחול',
+  colorPurple: 'סגול',
+  colorPink: 'ורוד',
+
+  copyScheduleBtn: 'העתק תוכנית',
+  copyScheduleSuccessMsg: 'התוכנית הועתקה — ניתן להדביק ב-Outlook',
+  copyScheduleFailedMsg: 'ההעתקה נכשלה',
+
+  enableNotificationsBtn: 'הפעל התראות',
+  notificationsSetupFailed: 'הפעלת ההתראות נכשלה',
 } as const;
 
 const en: Record<keyof typeof he, string> = {
@@ -138,6 +184,7 @@ const en: Record<keyof typeof he, string> = {
   absencesNav: 'Absences',
   reportsNav: 'Reports',
   adminName: 'Admin',
+  myVacationsNav: 'My Vacations',
 
   loginTitle: 'Log In',
   registerTitle: 'Register',
@@ -158,6 +205,8 @@ const en: Record<keyof typeof he, string> = {
 
   shiftStationHeader: 'Shift / Station',
   stationLabel: 'Station',
+  assignTechnicianAria: 'Assign technician to cell',
+  closeLabel: 'Close',
 
   weekPublishedNotice: 'This week’s schedule has been published — constraints can no longer be changed.',
   loadError: 'Error loading data',
@@ -179,7 +228,7 @@ const en: Record<keyof typeof he, string> = {
   technicianCol: 'Technician',
   statusCol: 'Status',
 
-  generateConfirm: 'Generating a schedule will overwrite the existing assignments. Continue?',
+  generateConfirm: 'Generating a schedule will overwrite the existing assignments, including notes, experimenters and colors. Continue?',
   absentPrefix: 'Absent:',
   doubleBookedWarning: 'Assigned twice on the same day',
   constraintPrefix: 'Constraint:',
@@ -245,6 +294,49 @@ const en: Record<keyof typeof he, string> = {
   dateCol: 'Date',
   dayCol: 'Day',
   shiftCol: 'Shift',
+
+  experimenterLabel: 'Experimenter',
+  noteLabel: 'Note',
+  experimenterInputPlaceholder: 'Experimenter name',
+  noteInputPlaceholder: 'Note',
+  stationsHeading: 'Stations',
+  stationNamePlaceholder: 'New station name',
+  activateBtn: 'Activate',
+  deactivateBtn: 'Deactivate',
+  noStationsHint: 'No stations defined yet. Add a station to start building a schedule.',
+  noActiveStationsBoardHint: 'No active stations. Add one in the management panel to build a schedule.',
+  stationNameRequired: 'Please enter a station name',
+  stationDeleteBlocked: 'Cannot delete a station that is used in a schedule — deactivate it instead',
+  stationNotFound: 'Station not found',
+
+  bothShiftsLabel: 'Morning+Evening',
+  boardUnfilledMark: '?',
+
+  deleteUserBtn: 'Delete',
+  deleteUserConfirmMsg: 'Delete this user? All of their constraints, absences, and assignments will be permanently deleted. This cannot be undone.',
+  deleteUserFailed: 'Failed to delete user',
+
+  colorPickerLabel: 'Cell color',
+  clearColorBtn: 'Clear',
+  applyRowColorBtn: 'Apply to row',
+  clearRowColorBtn: 'Clear row',
+  applyColumnColorBtn: 'Apply to column',
+  clearColumnColorBtn: 'Clear column',
+  colorRed: 'Red',
+  colorOrange: 'Orange',
+  colorYellow: 'Yellow',
+  colorGreen: 'Green',
+  colorTeal: 'Teal',
+  colorBlue: 'Blue',
+  colorPurple: 'Purple',
+  colorPink: 'Pink',
+
+  copyScheduleBtn: 'Copy schedule',
+  copyScheduleSuccessMsg: 'Schedule copied — you can paste it into Outlook',
+  copyScheduleFailedMsg: 'Copy failed',
+
+  enableNotificationsBtn: 'Enable notifications',
+  notificationsSetupFailed: 'Failed to enable notifications',
 };
 
 export const dict = { he, en };
@@ -266,6 +358,7 @@ const apiErrorMap: Record<string, string> = {
   'המייל אינו מורשה להרשמה. פנה למנהל.': 'This email is not authorized to register. Contact the admin.',
   'המייל כבר רשום במערכת': 'This email is already registered',
   'לא ניתן לשנות את ההרשאה של עצמך': 'You cannot change your own permission',
+  'לא ניתן למחוק את עצמך': 'You cannot delete yourself',
   'משתמש לא נמצא': 'User not found',
   'מייל או סיסמה שגויים': 'Incorrect email or password',
   'נתוני היעדרות לא תקינים': 'Invalid absence data',
@@ -274,6 +367,11 @@ const apiErrorMap: Record<string, string> = {
   'כתובת מייל לא תקינה': 'Invalid email address',
   'המייל כבר ברשימה': 'Email is already on the list',
   'אין תוכנית לשבוע זה': 'No schedule for this week',
+  'נא להזין שם עמדה': 'Please enter a station name',
+  'עמדה לא נמצאה': 'Station not found',
+  'לא ניתן למחוק עמדה שמשובצת בתוכנית — ניתן להשבית אותה': 'Cannot delete a station that is used in a schedule — deactivate it instead',
+  'שירות ההתראות אינו מוגדר בשרת': 'The notification service is not configured on the server',
+  'נתוני מנוי לא תקינים': 'Invalid subscription data',
 };
 
 // Non-hook translator for use in server components (e.g. generateMetadata).

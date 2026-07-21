@@ -17,7 +17,7 @@ export default function LoginPage() {
       ]}
       footer={
         <>
-          {t('noAccount')} <Link href="/register" className="text-blue-600 hover:underline">{t('toRegister')}</Link>
+          {t('noAccount')} <Link href="/register" className="link-brand">{t('toRegister')}</Link>
         </>
       }
     />

@@ -29,6 +29,20 @@ export async function GET() {
   }
 
   try {
+    const count = await prisma.station.count();
+    checks.stationTable = `ok (rows=${count})`;
+  } catch (e) {
+    checks.stationTable = `FAIL: ${(e as Error).message.slice(0, 300)}`;
+  }
+
+  try {
+    const count = await prisma.pushSubscription.count();
+    checks.pushSubscriptionTable = `ok (rows=${count})`;
+  } catch (e) {
+    checks.pushSubscriptionTable = `FAIL: ${(e as Error).message.slice(0, 300)}`;
+  }
+
+  try {
     await createSessionToken({ userId: 0, role: 'technician', name: 'health' });
     checks.jwtSign = 'ok';
   } catch (e) {
