@@ -2597,9 +2597,11 @@ export default function AdminScheduleClient() {
                                 className="w-full border-0 bg-transparent text-center"
                               >
                                 <option value="">— ריק —</option>
-                                {technicians.map(t => (
-                                  <option key={t.id} value={t.id}>{t.name}</option>
-                                ))}
+                                {technicians
+                                  .filter(t => constraints[String(t.id)]?.[date] !== 'off' || t.id === techId)
+                                  .map(t => (
+                                    <option key={t.id} value={t.id}>{t.name}</option>
+                                  ))}
                               </select>
                               {warning && <div className="text-xs text-orange-600 text-center">⚠ {warning}</div>}
                             </td>
@@ -2851,7 +2853,624 @@ git commit -m "feat: admin users page - allowlist management and admin grants"
 
 ---
 
-### Task 14: Deploy to Vercel + Neon (guided, interactive)
+### Task 14: Absences (vacation / sick / miluim, admin-entered)
+
+**Files:**
+- Modify: `prisma/schema.prisma`, `src/lib/labels.ts`, `src/app/api/constraints/route.ts`, `src/app/api/admin/overview/route.ts`, `src/app/api/admin/schedule/generate/route.ts`, `src/app/constraints/ConstraintsClient.tsx`, `src/app/admin/AdminDashboardClient.tsx`, `src/app/admin/schedule/AdminScheduleClient.tsx`, and the `ADMIN_LINKS` constant in `src/app/admin/AdminDashboardClient.tsx`, `src/app/admin/schedule/AdminScheduleClient.tsx`, `src/app/admin/users/AdminUsersClient.tsx`
+- Create: `src/app/api/admin/absences/route.ts`, `src/app/admin/absences/page.tsx`, `src/app/admin/absences/AdminAbsencesClient.tsx`
+- Test: `tests/absences-routes.test.ts` (new) + additions to `tests/admin-routes.test.ts` is NOT needed — keep absence tests in the new file.
+
+**Interfaces:**
+- Consumes: everything from Tasks 5-13.
+- Produces:
+  - Prisma model `Absence { id, technicianId (FK, cascade), startDate, endDate, type, createdAt }`; `Technician.absences Absence[]`.
+  - `GET /api/admin/absences` → `{ absences: Array<{id, technicianId, technicianName, startDate, endDate, type}> }` (admin only).
+  - `POST /api/admin/absences` `{technicianId, startDate, endDate, type}` → 200 | 400 invalid dates/type/range or admin target | 404 unknown technician.
+  - `DELETE /api/admin/absences` `{id}` → 200.
+  - `GET /api/constraints` response gains `absences: Record<date, type>` for the logged-in technician.
+  - `PUT /api/constraints` on an absent date → 409.
+  - `GET /api/admin/overview` response gains `absences: Record<techId, Record<date, type>>`; fill status counts an absent day as filled.
+  - Generate: absent technicians unavailable on absent dates regardless of constraints.
+  - `ADMIN_LINKS` (all admin client files): 4 links — dashboard, schedule, users, `{ href: '/admin/absences', label: 'היעדרויות' }`.
+
+- [ ] **Step 1: Schema + labels**
+
+Add to `prisma/schema.prisma` (and `absences Absence[]` to the Technician model):
+```prisma
+model Absence {
+  id           Int        @id @default(autoincrement())
+  technicianId Int
+  technician   Technician @relation(fields: [technicianId], references: [id], onDelete: Cascade)
+  startDate    String
+  endDate      String
+  type         String
+  createdAt    DateTime   @default(now())
+}
+```
+Run: `npx prisma db push` (with `$env:NODE_OPTIONS='--use-system-ca'`).
+
+Append to `src/lib/labels.ts`:
+```ts
+export const ABSENCE_LABELS: Record<string, string> = {
+  vacation: 'חופשה',
+  sick: 'מחלה',
+  miluim: 'מילואים',
+  other: 'אחר',
+};
+
+export const ABSENCE_COLORS: Record<string, string> = {
+  vacation: 'bg-purple-100 text-purple-800',
+  sick: 'bg-rose-100 text-rose-800',
+  miluim: 'bg-teal-100 text-teal-800',
+  other: 'bg-gray-200 text-gray-700',
+};
+```
+
+- [ ] **Step 2: Write the failing tests**
+
+`tests/absences-routes.test.ts`:
+```ts
+import { test, expect, beforeEach } from 'vitest';
+import { prisma } from '@/lib/db';
+import { createSessionToken } from '@/lib/auth';
+import { GET as listAbsences, POST as addAbsence, DELETE as removeAbsence } from '@/app/api/admin/absences/route';
+import { GET as getConstraints, PUT as putConstraint } from '@/app/api/constraints/route';
+import { GET as getOverview } from '@/app/api/admin/overview/route';
+import { POST as generate } from '@/app/api/admin/schedule/generate/route';
+import { PUT as saveSchedule } from '@/app/api/admin/schedule/route';
+
+const WEEK = '2026-07-19';
+const DATES = ['2026-07-19', '2026-07-20', '2026-07-21', '2026-07-22', '2026-07-23'];
+
+async function adminReq(method: string, url: string, body?: unknown): Promise<Request> {
+  const token = await createSessionToken({ userId: 999, role: 'admin', name: 'מנהל' });
+  return new Request(`http://test${url}`, {
+    method,
+    headers: { cookie: `session=${token}`, 'content-type': 'application/json' },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+}
+
+async function techReq(method: string, url: string, techId: number, body?: unknown): Promise<Request> {
+  const token = await createSessionToken({ userId: techId, role: 'technician', name: 'טק' });
+  return new Request(`http://test${url}`, {
+    method,
+    headers: { cookie: `session=${token}`, 'content-type': 'application/json' },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+}
+
+let techIds: number[];
+
+beforeEach(async () => {
+  await prisma.technician.deleteMany();
+  await prisma.schedule.deleteMany();
+  techIds = [];
+  for (let i = 1; i <= 9; i++) {
+    const t = await prisma.technician.create({
+      data: { name: `טכנאי ${i}`, email: `abs${i}@x.com`, passwordHash: 'x' },
+    });
+    techIds.push(t.id);
+    for (const date of DATES) {
+      await prisma.constraint.create({ data: { technicianId: t.id, date, value: 'flex' } });
+    }
+  }
+});
+
+test('absence CRUD: add, list with technician name, delete; validation', async () => {
+  const add = await addAbsence(await adminReq('POST', '/x', {
+    technicianId: techIds[0], startDate: DATES[0], endDate: DATES[2], type: 'miluim',
+  }));
+  expect(add.status).toBe(200);
+  const list = await (await listAbsences(await adminReq('GET', '/x'))).json();
+  expect(list.absences).toHaveLength(1);
+  expect(list.absences[0].technicianName).toBe('טכנאי 1');
+  expect(list.absences[0].type).toBe('miluim');
+
+  expect((await addAbsence(await adminReq('POST', '/x', { technicianId: techIds[0], startDate: DATES[2], endDate: DATES[0], type: 'sick' }))).status).toBe(400); // end before start
+  expect((await addAbsence(await adminReq('POST', '/x', { technicianId: techIds[0], startDate: DATES[0], endDate: DATES[1], type: 'party' }))).status).toBe(400); // bad type
+  expect((await addAbsence(await adminReq('POST', '/x', { technicianId: 123456, startDate: DATES[0], endDate: DATES[1], type: 'sick' }))).status).toBe(404);
+
+  expect((await removeAbsence(await adminReq('DELETE', '/x', { id: list.absences[0].id }))).status).toBe(200);
+  expect((await (await listAbsences(await adminReq('GET', '/x'))).json()).absences).toHaveLength(0);
+});
+
+test('absences route rejects non-admin', async () => {
+  expect((await listAbsences(await techReq('GET', '/x', techIds[0]))).status).toBe(403);
+});
+
+test('absence excludes technician from generation on absent days only', async () => {
+  await addAbsence(await adminReq('POST', '/x', {
+    technicianId: techIds[0], startDate: DATES[0], endDate: DATES[1], type: 'vacation',
+  }));
+  await generate(await adminReq('POST', '/x', { weekStart: WEEK, includeFriday: false }));
+  const onAbsent = await prisma.assignment.findMany({
+    where: { technicianId: techIds[0], date: { in: [DATES[0], DATES[1]] } },
+  });
+  expect(onAbsent).toHaveLength(0);
+  // 8 available techs on absent days still fill all 8 slots
+  const day0 = await prisma.assignment.findMany({ where: { date: DATES[0] } });
+  expect(day0).toHaveLength(8);
+});
+
+test('technician sees own absences and cannot edit an absent day', async () => {
+  await addAbsence(await adminReq('POST', '/x', {
+    technicianId: techIds[0], startDate: DATES[1], endDate: DATES[1], type: 'sick',
+  }));
+  const data = await (await getConstraints(await techReq('GET', `/x?weekStart=${WEEK}`, techIds[0]))).json();
+  expect(data.absences[DATES[1]]).toBe('sick');
+  expect(data.absences[DATES[0]]).toBeUndefined();
+  const put = await putConstraint(await techReq('PUT', '/x', techIds[0], { date: DATES[1], value: 'morning' }));
+  expect(put.status).toBe(409);
+});
+
+test('manual save rejects assignment on an off or absent day with 400', async () => {
+  await prisma.constraint.update({
+    where: { technicianId_date: { technicianId: techIds[1], date: DATES[0] } },
+    data: { value: 'off' },
+  });
+  const offRes = await saveSchedule(await adminReq('PUT', '/x', {
+    weekStart: WEEK,
+    includeFriday: false,
+    assignments: [{ date: DATES[0], shift: 'morning', station: 1, technicianId: techIds[1] }],
+  }));
+  expect(offRes.status).toBe(400);
+
+  await addAbsence(await adminReq('POST', '/x', {
+    technicianId: techIds[2], startDate: DATES[0], endDate: DATES[0], type: 'sick',
+  }));
+  const absRes = await saveSchedule(await adminReq('PUT', '/x', {
+    weekStart: WEEK,
+    includeFriday: false,
+    assignments: [{ date: DATES[0], shift: 'morning', station: 1, technicianId: techIds[2] }],
+  }));
+  expect(absRes.status).toBe(400);
+
+  // shift-type mismatch is still allowed (warning-only in UI)
+  const mismatch = await saveSchedule(await adminReq('PUT', '/x', {
+    weekStart: WEEK,
+    includeFriday: false,
+    assignments: [{ date: DATES[0], shift: 'morning', station: 1, technicianId: techIds[3] }],
+  }));
+  expect(mismatch.status).toBe(200);
+});
+
+test('overview includes absence map and counts absent days as filled', async () => {
+  // tech 9: no constraints at all, absent all week -> status full
+  const t9 = techIds[8];
+  await prisma.constraint.deleteMany({ where: { technicianId: t9 } });
+  await addAbsence(await adminReq('POST', '/x', {
+    technicianId: t9, startDate: DATES[0], endDate: DATES[4], type: 'vacation',
+  }));
+  const data = await (await getOverview(await adminReq('GET', `/x?weekStart=${WEEK}`))).json();
+  expect(data.absences[String(t9)][DATES[0]]).toBe('vacation');
+  const row = data.technicians.find((t: { id: number }) => t.id === t9);
+  expect(row.status).toBe('full');
+});
+```
+
+- [ ] **Step 3: Run tests to verify they fail**
+
+Run: `npx vitest run tests/absences-routes.test.ts`
+Expected: FAIL — `@/app/api/admin/absences/route` not found.
+
+- [ ] **Step 4: Implement API changes**
+
+`src/app/api/admin/absences/route.ts`:
+```ts
+import { prisma } from '@/lib/db';
+import { getSession } from '@/lib/auth';
+
+const TYPES = ['vacation', 'sick', 'miluim', 'other'];
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+export async function GET(req: Request) {
+  const session = await getSession(req);
+  if (session?.role !== 'admin') return Response.json({ error: 'אין הרשאה' }, { status: 403 });
+  const rows = await prisma.absence.findMany({
+    include: { technician: { select: { name: true } } },
+    orderBy: [{ startDate: 'desc' }, { id: 'desc' }],
+  });
+  return Response.json({
+    absences: rows.map(a => ({
+      id: a.id,
+      technicianId: a.technicianId,
+      technicianName: a.technician.name,
+      startDate: a.startDate,
+      endDate: a.endDate,
+      type: a.type,
+    })),
+  });
+}
+
+export async function POST(req: Request) {
+  const session = await getSession(req);
+  if (session?.role !== 'admin') return Response.json({ error: 'אין הרשאה' }, { status: 403 });
+  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  const technicianId = body.technicianId;
+  const startDate = typeof body.startDate === 'string' ? body.startDate : '';
+  const endDate = typeof body.endDate === 'string' ? body.endDate : '';
+  const type = typeof body.type === 'string' ? body.type : '';
+  if (
+    typeof technicianId !== 'number' ||
+    !DATE_RE.test(startDate) ||
+    !DATE_RE.test(endDate) ||
+    startDate > endDate ||
+    !TYPES.includes(type)
+  ) {
+    return Response.json({ error: 'נתוני היעדרות לא תקינים' }, { status: 400 });
+  }
+  const tech = await prisma.technician.findUnique({ where: { id: technicianId } });
+  if (!tech) return Response.json({ error: 'עובד לא נמצא' }, { status: 404 });
+  if (tech.isAdmin) return Response.json({ error: 'לא ניתן להזין היעדרות למנהל' }, { status: 400 });
+  await prisma.absence.create({ data: { technicianId, startDate, endDate, type } });
+  return Response.json({ ok: true });
+}
+
+export async function DELETE(req: Request) {
+  const session = await getSession(req);
+  if (session?.role !== 'admin') return Response.json({ error: 'אין הרשאה' }, { status: 403 });
+  const body = (await req.json().catch(() => ({}))) as { id?: number };
+  if (typeof body.id !== 'number') return Response.json({ error: 'נתונים לא תקינים' }, { status: 400 });
+  await prisma.absence.deleteMany({ where: { id: body.id } });
+  return Response.json({ ok: true });
+}
+```
+
+`src/app/api/constraints/route.ts` — in GET, after fetching `rows`, add:
+```ts
+  const absenceRows = await prisma.absence.findMany({
+    where: {
+      technicianId: session.userId,
+      startDate: { lte: dates[dates.length - 1] },
+      endDate: { gte: dates[0] },
+    },
+  });
+  const absences: Record<string, string> = {};
+  for (const a of absenceRows) {
+    for (const d of dates) {
+      if (a.startDate <= d && d <= a.endDate) absences[d] = a.type;
+    }
+  }
+```
+and include `absences` in the GET response JSON. In PUT, after the published-schedule check, add:
+```ts
+  const absent = await prisma.absence.findFirst({
+    where: { technicianId: session.userId, startDate: { lte: date }, endDate: { gte: date } },
+  });
+  if (absent) {
+    return Response.json({ error: 'ביום זה מוגדרת היעדרות — פנה למנהל' }, { status: 409 });
+  }
+```
+
+`src/app/api/admin/overview/route.ts` — after building `byTech`, add:
+```ts
+  const absenceRows = await prisma.absence.findMany({
+    where: { startDate: { lte: dates[dates.length - 1] }, endDate: { gte: dates[0] } },
+  });
+  const absByTech: Record<string, Record<string, string>> = {};
+  for (const a of absenceRows) {
+    for (const d of dates) {
+      if (a.startDate <= d && d <= a.endDate) (absByTech[String(a.technicianId)] ??= {})[d] = a.type;
+    }
+  }
+```
+Change the status computation to count absent days as filled:
+```ts
+    technicians: technicians.map(t => {
+      const filled = dates.filter(
+        d => byTech[String(t.id)]?.[d] || absByTech[String(t.id)]?.[d]
+      ).length;
+      return {
+        id: t.id,
+        name: t.name,
+        status: filled === dates.length ? 'full' : filled > 0 ? 'partial' : 'none',
+      };
+    }),
+```
+and add `absences: absByTech` to the response JSON.
+
+`src/app/api/admin/schedule/route.ts` (PUT) — after the shape-validation block and BEFORE the upsert, enforce the hard block (off-day or absence → 400):
+```ts
+  if (assignments.length > 0) {
+    const assignDates = [...new Set(assignments.map(a => a.date))].sort();
+    const [offRows, absenceRows] = await Promise.all([
+      prisma.constraint.findMany({ where: { date: { in: assignDates }, value: 'off' } }),
+      prisma.absence.findMany({
+        where: {
+          startDate: { lte: assignDates[assignDates.length - 1] },
+          endDate: { gte: assignDates[0] },
+        },
+      }),
+    ]);
+    const offSet = new Set(offRows.map(c => `${c.technicianId}|${c.date}`));
+    const blocked = assignments.some(
+      a =>
+        offSet.has(`${a.technicianId}|${a.date}`) ||
+        absenceRows.some(
+          ab => ab.technicianId === a.technicianId && ab.startDate <= a.date && a.date <= ab.endDate
+        )
+    );
+    if (blocked) {
+      return Response.json({ error: 'לא ניתן לשבץ עובד ביום חופש או היעדרות' }, { status: 400 });
+    }
+  }
+```
+
+`src/app/api/admin/schedule/generate/route.ts` — after building `constraintsByTech`, add:
+```ts
+  const absenceRows = await prisma.absence.findMany({
+    where: { startDate: { lte: dates[dates.length - 1] }, endDate: { gte: dates[0] } },
+  });
+  for (const a of absenceRows) {
+    const rec = constraintsByTech.get(a.technicianId);
+    if (!rec) continue;
+    for (const d of dates) {
+      if (a.startDate <= d && d <= a.endDate) delete rec[d];
+    }
+  }
+```
+
+- [ ] **Step 5: Run tests to verify they pass**
+
+Run: `npx vitest run tests/absences-routes.test.ts` → 6 passed.
+Run: `npm test` → all passing (55).
+
+- [ ] **Step 6: Admin absences page**
+
+`src/app/admin/absences/page.tsx`:
+```tsx
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+import { verifySessionToken } from '@/lib/auth';
+import AdminAbsencesClient from './AdminAbsencesClient';
+
+export default async function AdminAbsencesPage() {
+  const token = (await cookies()).get('session')?.value;
+  const session = token ? await verifySessionToken(token) : null;
+  if (!session || session.role !== 'admin') redirect('/login');
+  return <AdminAbsencesClient />;
+}
+```
+
+`src/app/admin/absences/AdminAbsencesClient.tsx`:
+```tsx
+'use client';
+
+import { useCallback, useEffect, useState } from 'react';
+import NavBar from '@/components/NavBar';
+import { ABSENCE_LABELS, ABSENCE_COLORS } from '@/lib/labels';
+import { formatDate } from '@/lib/dates';
+
+const ADMIN_LINKS = [
+  { href: '/admin', label: 'לוח בקרה' },
+  { href: '/admin/schedule', label: 'תוכנית משמרות' },
+  { href: '/admin/users', label: 'ניהול משתמשים' },
+  { href: '/admin/absences', label: 'היעדרויות' },
+];
+
+interface Absence {
+  id: number;
+  technicianId: number;
+  technicianName: string;
+  startDate: string;
+  endDate: string;
+  type: string;
+}
+interface Tech { id: number; name: string }
+
+export default function AdminAbsencesClient() {
+  const [absences, setAbsences] = useState<Absence[]>([]);
+  const [techs, setTechs] = useState<Tech[]>([]);
+  const [form, setForm] = useState({ technicianId: '', type: 'vacation', startDate: '', endDate: '' });
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    const [absRes, usersRes] = await Promise.all([
+      fetch('/api/admin/absences'),
+      fetch('/api/admin/users'),
+    ]);
+    if (absRes.ok) setAbsences((await absRes.json()).absences);
+    if (usersRes.ok) {
+      const users = (await usersRes.json()).users as Array<Tech & { isAdmin: boolean }>;
+      setTechs(users.filter(u => !u.isAdmin));
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function add(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    const res = await fetch('/api/admin/absences', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        technicianId: Number(form.technicianId),
+        startDate: form.startDate,
+        endDate: form.endDate,
+        type: form.type,
+      }),
+    });
+    if (res.ok) {
+      setForm({ technicianId: '', type: 'vacation', startDate: '', endDate: '' });
+      await load();
+    } else {
+      setError((await res.json().catch(() => ({}))).error ?? 'שגיאה');
+    }
+  }
+
+  async function remove(id: number) {
+    await fetch('/api/admin/absences', {
+      method: 'DELETE',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id }),
+    });
+    await load();
+  }
+
+  return (
+    <div>
+      <NavBar name="מנהל" links={ADMIN_LINKS} />
+      <main className="max-w-3xl mx-auto p-4 space-y-6">
+        <section>
+          <h2 className="font-bold mb-2">הוספת היעדרות</h2>
+          <form onSubmit={add} className="bg-white rounded-lg shadow-sm p-4 flex flex-wrap items-end gap-3">
+            <label className="block text-sm">
+              עובד
+              <select
+                required
+                value={form.technicianId}
+                onChange={e => setForm(f => ({ ...f, technicianId: e.target.value }))}
+                className="block mt-1 border rounded px-2 py-1.5 min-w-36"
+              >
+                <option value="">בחר עובד</option>
+                {techs.map(t => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-sm">
+              סוג
+              <select
+                value={form.type}
+                onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
+                className="block mt-1 border rounded px-2 py-1.5"
+              >
+                {Object.entries(ABSENCE_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-sm">
+              מתאריך
+              <input
+                type="date"
+                required
+                value={form.startDate}
+                onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))}
+                className="block mt-1 border rounded px-2 py-1.5"
+              />
+            </label>
+            <label className="block text-sm">
+              עד תאריך (כולל)
+              <input
+                type="date"
+                required
+                value={form.endDate}
+                onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))}
+                className="block mt-1 border rounded px-2 py-1.5"
+              />
+            </label>
+            <button type="submit" className="bg-blue-600 text-white rounded px-4 py-2 hover:bg-blue-700">
+              הוסף
+            </button>
+          </form>
+          {error && <p className="text-red-600 text-sm mt-2">{error}</p>}
+        </section>
+        <section>
+          <h2 className="font-bold mb-2">היעדרויות</h2>
+          {loading ? (
+            <p className="text-center text-gray-500 py-8">טוען...</p>
+          ) : absences.length === 0 ? (
+            <p className="text-gray-500 text-sm">אין היעדרויות.</p>
+          ) : (
+            <table className="w-full bg-white rounded-lg shadow-sm text-sm border-collapse">
+              <thead>
+                <tr>
+                  <th className="border p-2 bg-gray-100 text-start">עובד</th>
+                  <th className="border p-2 bg-gray-100">סוג</th>
+                  <th className="border p-2 bg-gray-100">מתאריך</th>
+                  <th className="border p-2 bg-gray-100">עד תאריך</th>
+                  <th className="border p-2 bg-gray-100"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {absences.map(a => (
+                  <tr key={a.id}>
+                    <td className="border p-2">{a.technicianName}</td>
+                    <td className="border p-2 text-center">
+                      <span className={`px-2 py-0.5 rounded-full text-xs ${ABSENCE_COLORS[a.type]}`}>
+                        {ABSENCE_LABELS[a.type]}
+                      </span>
+                    </td>
+                    <td className="border p-2 text-center">{formatDate(a.startDate)}</td>
+                    <td className="border p-2 text-center">{formatDate(a.endDate)}</td>
+                    <td className="border p-2 text-center">
+                      <button onClick={() => remove(a.id)} className="text-red-600 hover:underline">
+                        מחק
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+      </main>
+    </div>
+  );
+}
+```
+
+- [ ] **Step 7: Wire absences into existing screens**
+
+1. **`ADMIN_LINKS` in `src/app/admin/AdminDashboardClient.tsx`, `src/app/admin/schedule/AdminScheduleClient.tsx`, `src/app/admin/users/AdminUsersClient.tsx`:** add `{ href: '/admin/absences', label: 'היעדרויות' }` as the 4th entry (matching the constant in AdminAbsencesClient above).
+
+2. **`src/app/constraints/ConstraintsClient.tsx`:** add `const [absences, setAbsences] = useState<Record<string, string>>({});` and set it from `data.absences` in `load`. Import `ABSENCE_LABELS` from `@/lib/labels`. In the day-row rendering, when `absences[date]` exists, render instead of the 4 buttons:
+```tsx
+<span className="px-3 py-1.5 rounded-full text-sm bg-purple-100 text-purple-800">
+  {ABSENCE_LABELS[absences[date]]} (הוזן על ידי המנהל)
+</span>
+```
+(keep the day label; the whole row's buttons are replaced by this chip).
+
+3. **`src/app/admin/AdminDashboardClient.tsx`:** add `absences: Record<string, Record<string, string>>;` to the `Overview` interface. Import `ABSENCE_LABELS, ABSENCE_COLORS`. In the constraints-table cell, absence takes precedence over constraint:
+```tsx
+{data.absences[String(t.id)]?.[date] ? (
+  <span className={`px-2 py-0.5 rounded-full text-xs ${ABSENCE_COLORS[data.absences[String(t.id)][date]]}`}>
+    {ABSENCE_LABELS[data.absences[String(t.id)][date]]}
+  </span>
+) : v ? ( ...existing constraint chip... ) : ( ...existing dash... )}
+```
+
+4. **`src/app/admin/schedule/AdminScheduleClient.tsx`:** add `const [absences, setAbsences] = useState<Record<string, Record<string, string>>>({});` set from `overview.absences` in `load`. Import `ABSENCE_LABELS`. In `warningsFor`, before the constraint check:
+```ts
+    const abs = absences[String(techId)]?.[date];
+    if (abs) return `נעדר: ${ABSENCE_LABELS[abs]}`;
+```
+Also extend the dropdown's hard-block filter so absent technicians are hidden too (off-technicians are already filtered from Task 12):
+```tsx
+                                {technicians
+                                  .filter(
+                                    t =>
+                                      (constraints[String(t.id)]?.[date] !== 'off' &&
+                                        !absences[String(t.id)]?.[date]) ||
+                                      t.id === techId
+                                  )
+                                  .map(t => (
+                                    <option key={t.id} value={t.id}>{t.name}</option>
+                                  ))}
+```
+
+- [ ] **Step 8: Verify**
+
+Run: `npm test` → all passing. Run: `npm run build` → success (route `/admin/absences` present).
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add prisma/schema.prisma src/lib/labels.ts src/app/api src/app/admin src/app/constraints tests/absences-routes.test.ts
+git commit -m "feat: admin-entered absences (vacation/sick/miluim) override constraints"
+```
+
+---
+
+### Task 15: Deploy to Vercel + Neon (guided, interactive)
 
 **Files:**
 - Modify: `prisma/schema.prisma` (provider), `.env` (local stays SQLite? No — switch dev to Neon too, or keep two: see steps)
