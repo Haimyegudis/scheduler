@@ -1,7 +1,10 @@
 import type { Metadata } from 'next';
 import './globals.css';
 
-export const metadata: Metadata = { title: 'שיבוץ משמרות' };
+export const metadata: Metadata = {
+  title: 'שיבוץ משמרות | HP Indigo',
+  icons: { icon: '/logo.png' },
+};
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

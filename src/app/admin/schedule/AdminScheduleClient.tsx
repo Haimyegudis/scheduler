@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import NavBar from '@/components/NavBar';
 import WeekNav from '@/components/WeekNav';
+import Loading from '@/components/Loading';
 import { getCurrentWeekStart, weekDates, dayName, formatDate } from '@/lib/dates';
 import { SHIFT_LABELS, CONSTRAINT_LABELS } from '@/lib/labels';
 
@@ -172,7 +173,7 @@ export default function AdminScheduleClient() {
       <main className="max-w-6xl mx-auto p-4">
         <WeekNav weekStart={weekStart} onChange={setWeekStart} />
         {loading ? (
-          <p className="text-center text-gray-500 py-8">טוען...</p>
+          <Loading />
         ) : (
           <>
             <div className="flex flex-wrap items-center gap-3 mb-4">

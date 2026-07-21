@@ -21,7 +21,10 @@ export default function NavBar({
 
   return (
     <header className="bg-white border-b px-4 py-3 flex items-center gap-4 flex-wrap">
-      <span className="font-bold">שיבוץ משמרות</span>
+      <span className="flex items-center gap-2 font-bold">
+        <img src="/logo.png" alt="HP Indigo" className="h-8 w-auto rounded" />
+        שיבוץ משמרות
+      </span>
       <nav className="flex gap-3">
         {links.map(l => (
           <Link

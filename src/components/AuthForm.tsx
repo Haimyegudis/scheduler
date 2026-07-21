@@ -52,6 +52,7 @@ export default function AuthForm({
   return (
     <main className="min-h-screen flex items-center justify-center p-4">
       <form onSubmit={submit} className="bg-white rounded-xl shadow p-6 w-full max-w-sm space-y-4">
+        <img src="/logo.png" alt="HP Indigo" className="h-16 w-auto rounded-lg mx-auto" />
         <h1 className="text-xl font-bold text-center">{title}</h1>
         {fields.map(f => (
           <label key={f.name} className="block">

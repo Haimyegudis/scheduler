@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import NavBar from '@/components/NavBar';
 import WeekNav from '@/components/WeekNav';
+import Loading from '@/components/Loading';
 import ScheduleTable, { type AssignmentView } from '@/components/ScheduleTable';
 import { getCurrentWeekStart, weekDates } from '@/lib/dates';
 
@@ -36,7 +37,7 @@ export default function ScheduleClient({ name, technicianId }: { name: string; t
       <main className="max-w-5xl mx-auto p-4">
         <WeekNav weekStart={weekStart} onChange={setWeekStart} />
         {!data ? (
-          <p className="text-center text-gray-500 py-8">טוען...</p>
+          <Loading />
         ) : !data.schedule ? (
           <p className="text-center text-gray-500 py-8">טרם פורסמה תוכנית לשבוע זה.</p>
         ) : (

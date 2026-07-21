@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import NavBar from '@/components/NavBar';
+import Loading from '@/components/Loading';
 
 const ADMIN_LINKS = [
   { href: '/admin', label: 'לוח בקרה' },
@@ -77,7 +78,7 @@ export default function AdminUsersClient({ myUserId }: { myUserId: number }) {
       <main className="max-w-3xl mx-auto p-4 space-y-8">
         {error && <p className="text-red-600 text-sm">{error}</p>}
         {loading ? (
-          <p className="text-center text-gray-500 py-8">טוען...</p>
+          <Loading />
         ) : (
           <>
             <section>

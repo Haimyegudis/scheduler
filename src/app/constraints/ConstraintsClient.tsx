@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import NavBar from '@/components/NavBar';
 import WeekNav from '@/components/WeekNav';
+import Loading from '@/components/Loading';
 import { getCurrentWeekStart, weekDates, dayName, formatDate } from '@/lib/dates';
 import { CONSTRAINT_LABELS } from '@/lib/labels';
 
@@ -70,7 +71,7 @@ export default function ConstraintsClient({ name }: { name: string }) {
         )}
         {error && <p className="text-red-600 text-sm mb-2">{error}</p>}
         {loading ? (
-          <p className="text-center text-gray-500 py-8">טוען...</p>
+          <Loading />
         ) : (
           <div className="space-y-3">
             {dates.map(date => (
