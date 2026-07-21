@@ -4021,7 +4021,36 @@ git commit -m "feat: reports - per-worker and per-machine shift history from pub
 
 ---
 
-### Task 16: Deploy to Vercel + Neon (guided, interactive)
+### Task 16: Bilingual UI (Hebrew + English)
+
+**Files:**
+- Create: `src/lib/i18n.tsx` (dictionaries + context provider + `useT()` hook + `<LangToggle />`)
+- Modify: `src/app/layout.tsx` (lang/dir from cookie), `src/components/NavBar.tsx` (toggle button), `src/components/AuthForm.tsx`, `src/components/WeekNav.tsx`, `src/components/ScheduleTable.tsx`, `src/components/Loading.tsx`, all page clients (`ConstraintsClient`, `ScheduleClient`, `AdminDashboardClient`, `AdminScheduleClient`, `AdminUsersClient`, `AdminAbsencesClient`, `AdminReportsClient`), `src/app/login/page.tsx`, `src/app/register/page.tsx`, `src/lib/labels.ts` (label maps become per-language lookups)
+
+**Interfaces / approach (implementer has latitude on exact keys, not on behavior):**
+- `Lang = 'he' | 'en'`. Dictionary object per language covering EVERY user-visible string currently hardcoded in the files above (Hebrew strings move into the `he` dictionary; matching English translations in `en`).
+- Language stored in a `lang` cookie (not localStorage — the server layout must read it): `document.cookie = 'lang=en; path=/; max-age=31536000'`.
+- `src/app/layout.tsx` becomes async, reads the cookie via `(await cookies()).get('lang')`, sets `<html lang={lang} dir={lang === 'he' ? 'rtl' : 'ltr'}>`.
+- Client provider `<I18nProvider initialLang>` wraps children in layout; `useT()` returns `{ t, lang, setLang }`; `setLang` writes the cookie and calls `router.refresh()` (or `location.reload()`) so dir flips.
+- `<LangToggle />`: small button showing `EN` when in Hebrew and `עב` when in English; placed in NavBar (end) and on the auth form card.
+- Label maps (`CONSTRAINT_LABELS` etc.): change call sites to look up via a function `constraintLabel(lang, value)` or per-lang maps — implementer's choice, consistent everywhere.
+- Server API error messages remain Hebrew; the client translates known messages via a Hebrew→English map in the dictionary (fallback: show as-is).
+- Hebrew day names (`dayName`) get an English variant selected by lang.
+- Dates and numbers unchanged.
+
+- [ ] **Step 1: Build `src/lib/i18n.tsx` + layout/cookie wiring + toggle**
+- [ ] **Step 2: Sweep all listed files — no user-visible hardcoded string left outside the dictionaries** (verify with a final grep for Hebrew characters in src/ — allowed only inside `src/lib/i18n.tsx` and `src/lib/labels.ts` if labels stay there)
+- [ ] **Step 3: Verify `npm test` (all passing — tests hit APIs, not UI strings) and `npm run build`**
+- [ ] **Step 4: Commit**
+
+```bash
+git add src
+git commit -m "feat: bilingual UI - Hebrew/English with RTL/LTR switching"
+```
+
+---
+
+### Task 17: Deploy to Vercel + Neon (guided, interactive)
 
 **Files:**
 - Modify: `prisma/schema.prisma` (provider), `.env` (local stays SQLite? No — switch dev to Neon too, or keep two: see steps)
