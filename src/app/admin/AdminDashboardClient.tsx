@@ -29,11 +29,21 @@ interface Overview {
 export default function AdminDashboardClient() {
   const [weekStart, setWeekStart] = useState(getCurrentWeekStart());
   const [data, setData] = useState<Overview | null>(null);
+  const [error, setError] = useState('');
 
   const load = useCallback(async (ws: string) => {
     setData(null);
-    const res = await fetch(`/api/admin/overview?weekStart=${ws}`);
-    if (res.ok) setData(await res.json());
+    setError('');
+    try {
+      const res = await fetch(`/api/admin/overview?weekStart=${ws}`);
+      if (res.ok) {
+        setData(await res.json());
+      } else {
+        setError('שגיאה בטעינת נתונים');
+      }
+    } catch {
+      setError('שגיאת תקשורת — נסה לרענן את הדף');
+    }
   }, []);
 
   useEffect(() => {
@@ -45,9 +55,10 @@ export default function AdminDashboardClient() {
       <NavBar name="מנהל" links={ADMIN_LINKS} />
       <main className="max-w-5xl mx-auto p-4">
         <WeekNav weekStart={weekStart} onChange={setWeekStart} />
-        {!data ? (
+        {error && <p role="alert" className="text-red-600 text-sm mb-2">{error}</p>}
+        {!data && !error ? (
           <Loading />
-        ) : (
+        ) : error && !data ? null : data ? (
           <>
             <div className="flex items-center gap-2 mb-4 text-sm">
               <span className="text-gray-500">סטטוס תוכנית:</span>
@@ -103,7 +114,7 @@ export default function AdminDashboardClient() {
               </div>
             )}
           </>
-        )}
+        ) : null}
       </main>
     </div>
   );

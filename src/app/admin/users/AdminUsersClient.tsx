@@ -21,13 +21,18 @@ export default function AdminUsersClient({ myUserId }: { myUserId: number }) {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const [emailsRes, usersRes] = await Promise.all([
-      fetch('/api/admin/allowed-emails'),
-      fetch('/api/admin/users'),
-    ]);
-    if (emailsRes.ok) setEmails((await emailsRes.json()).emails);
-    if (usersRes.ok) setUsers((await usersRes.json()).users);
-    setLoading(false);
+    try {
+      const [emailsRes, usersRes] = await Promise.all([
+        fetch('/api/admin/allowed-emails'),
+        fetch('/api/admin/users'),
+      ]);
+      if (emailsRes.ok) setEmails((await emailsRes.json()).emails);
+      if (usersRes.ok) setUsers((await usersRes.json()).users);
+    } catch {
+      setError('שגיאת תקשורת — נסה לרענן את הדף');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -37,37 +42,53 @@ export default function AdminUsersClient({ myUserId }: { myUserId: number }) {
   async function addEmail(e: React.FormEvent) {
     e.preventDefault();
     setError('');
-    const res = await fetch('/api/admin/allowed-emails', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ email: newEmail }),
-    });
-    if (res.ok) {
-      setNewEmail('');
-      await load();
-    } else {
-      setError((await res.json().catch(() => ({}))).error ?? 'שגיאה');
+    try {
+      const res = await fetch('/api/admin/allowed-emails', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: newEmail }),
+      });
+      if (res.ok) {
+        setNewEmail('');
+        await load();
+      } else {
+        setError((await res.json().catch(() => ({}))).error ?? 'שגיאה');
+      }
+    } catch {
+      setError('שגיאת תקשורת');
     }
   }
 
   async function removeEmail(email: string) {
-    await fetch('/api/admin/allowed-emails', {
-      method: 'DELETE',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ email }),
-    });
+    setError('');
+    try {
+      const res = await fetch('/api/admin/allowed-emails', {
+        method: 'DELETE',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      if (!res.ok) {
+        setError((await res.json().catch(() => ({}))).error ?? 'המחיקה נכשלה');
+      }
+    } catch {
+      setError('שגיאת תקשורת');
+    }
     await load();
   }
 
   async function toggleAdmin(user: User) {
     setError('');
-    const res = await fetch('/api/admin/users', {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ userId: user.id, isAdmin: !user.isAdmin }),
-    });
-    if (!res.ok) {
-      setError((await res.json().catch(() => ({}))).error ?? 'שגיאה');
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, isAdmin: !user.isAdmin }),
+      });
+      if (!res.ok) {
+        setError((await res.json().catch(() => ({}))).error ?? 'שגיאה');
+      }
+    } catch {
+      setError('שגיאת תקשורת');
     }
     await load();
   }

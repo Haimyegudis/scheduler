@@ -20,11 +20,21 @@ interface ScheduleData {
 export default function ScheduleClient({ name, technicianId }: { name: string; technicianId: number }) {
   const [weekStart, setWeekStart] = useState(getCurrentWeekStart());
   const [data, setData] = useState<ScheduleData | null>(null);
+  const [error, setError] = useState('');
 
   const load = useCallback(async (ws: string) => {
     setData(null);
-    const res = await fetch(`/api/schedule?weekStart=${ws}`);
-    if (res.ok) setData(await res.json());
+    setError('');
+    try {
+      const res = await fetch(`/api/schedule?weekStart=${ws}`);
+      if (res.ok) {
+        setData(await res.json());
+      } else {
+        setError('שגיאה בטעינת נתונים');
+      }
+    } catch {
+      setError('שגיאת תקשורת — נסה לרענן את הדף');
+    }
   }, []);
 
   useEffect(() => {
@@ -36,9 +46,10 @@ export default function ScheduleClient({ name, technicianId }: { name: string; t
       <NavBar name={name} links={TECH_LINKS} />
       <main className="max-w-5xl mx-auto p-4">
         <WeekNav weekStart={weekStart} onChange={setWeekStart} />
-        {!data ? (
+        {error && <p role="alert" className="text-red-600 text-sm mb-2">{error}</p>}
+        {!data && !error ? (
           <Loading />
-        ) : !data.schedule ? (
+        ) : error && !data ? null : !data ? null : !data.schedule ? (
           <p className="text-center text-gray-500 py-8">טרם פורסמה תוכנית לשבוע זה.</p>
         ) : (
           <>

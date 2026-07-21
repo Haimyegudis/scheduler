@@ -25,16 +25,21 @@ export default function ConstraintsClient({ name }: { name: string }) {
   const load = useCallback(async (ws: string) => {
     setLoading(true);
     setError('');
-    const res = await fetch(`/api/constraints?weekStart=${ws}`);
-    if (res.ok) {
-      const data = await res.json();
-      setConstraints(data.constraints);
-      setIncludeFriday(data.includeFriday);
-      setPublished(data.published);
-    } else {
-      setError('שגיאה בטעינת נתונים');
+    try {
+      const res = await fetch(`/api/constraints?weekStart=${ws}`);
+      if (res.ok) {
+        const data = await res.json();
+        setConstraints(data.constraints);
+        setIncludeFriday(data.includeFriday);
+        setPublished(data.published);
+      } else {
+        setError('שגיאה בטעינת נתונים');
+      }
+    } catch {
+      setError('שגיאת תקשורת — נסה לרענן את הדף');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -45,15 +50,20 @@ export default function ConstraintsClient({ name }: { name: string }) {
     if (published) return;
     const prev = constraints;
     setConstraints({ ...constraints, [date]: value });
-    const res = await fetch('/api/constraints', {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ date, value }),
-    });
-    if (!res.ok) {
+    try {
+      const res = await fetch('/api/constraints', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ date, value }),
+      });
+      if (!res.ok) {
+        setConstraints(prev);
+        const data = await res.json().catch(() => ({}));
+        setError(data.error ?? 'השמירה נכשלה');
+      }
+    } catch {
       setConstraints(prev);
-      const data = await res.json().catch(() => ({}));
-      setError(data.error ?? 'השמירה נכשלה');
+      setError('שגיאת תקשורת — השמירה נכשלה');
     }
   }
 
