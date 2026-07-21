@@ -12,6 +12,7 @@ const ADMIN_LINKS = [
   { href: '/admin/schedule', label: 'תוכנית משמרות' },
   { href: '/admin/users', label: 'ניהול משתמשים' },
   { href: '/admin/absences', label: 'היעדרויות' },
+  { href: '/admin/reports', label: 'דוחות' },
 ];
 
 const STATUS_COLORS: Record<string, string> = {
