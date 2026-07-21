@@ -109,6 +109,21 @@ test('save schedule replaces assignments and persists includeFriday', async () =
   expect(schedule!.assignments).toHaveLength(1);
 });
 
+test('save schedule drops assignments outside the active week days', async () => {
+  const res = await saveSchedule(await adminReq('PUT', '/x', {
+    weekStart: WEEK,
+    includeFriday: false,
+    assignments: [
+      { date: DATES[0], shift: 'morning', station: 1, technicianId: techIds[0] },
+      { date: '2026-07-24', shift: 'morning', station: 1, technicianId: techIds[1] }, // Friday while includeFriday=false
+    ],
+  }));
+  expect(res.status).toBe(200);
+  const schedule = await prisma.schedule.findUnique({ where: { weekStart: WEEK }, include: { assignments: true } });
+  expect(schedule!.assignments).toHaveLength(1);
+  expect(schedule!.assignments[0].date).toBe(DATES[0]);
+});
+
 test('save schedule rejects malformed assignment objects with 400', async () => {
   const res = await saveSchedule(await adminReq('PUT', '/x', {
     weekStart: WEEK,

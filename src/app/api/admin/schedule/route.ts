@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { weekDates, weekStartOf } from '@/lib/dates';
 
 interface SaveBody {
   weekStart?: string;
@@ -7,12 +8,17 @@ interface SaveBody {
   assignments?: Array<{ date: string; shift: string; station: number; technicianId: number }>;
 }
 
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 export async function PUT(req: Request) {
   const session = await getSession(req);
   if (session?.role !== 'admin') return Response.json({ error: 'אין הרשאה' }, { status: 403 });
   const body = (await req.json().catch(() => ({}))) as SaveBody;
-  const { weekStart, includeFriday = false, assignments = [] } = body;
-  if (!weekStart) return Response.json({ error: 'שבוע לא תקין' }, { status: 400 });
+  const { weekStart, includeFriday = false } = body;
+  let { assignments = [] } = body;
+  if (!weekStart || !DATE_RE.test(weekStart) || weekStartOf(weekStart) !== weekStart) {
+    return Response.json({ error: 'שבוע לא תקין' }, { status: 400 });
+  }
 
   const valid = assignments.every(
     a =>
@@ -25,6 +31,9 @@ export async function PUT(req: Request) {
       Number.isInteger(a.technicianId)
   );
   if (!valid) return Response.json({ error: 'נתוני שיבוץ לא תקינים' }, { status: 400 });
+
+  const validDates = new Set(weekDates(weekStart, includeFriday));
+  assignments = assignments.filter(a => validDates.has(a.date));
 
   if (assignments.length > 0) {
     const assignDates = [...new Set(assignments.map(a => a.date))].sort();

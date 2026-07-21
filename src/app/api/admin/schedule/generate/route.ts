@@ -1,14 +1,18 @@
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
-import { weekDates } from '@/lib/dates';
+import { weekDates, weekStartOf } from '@/lib/dates';
 import { generateAssignments, type ConstraintValue } from '@/lib/scheduler';
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export async function POST(req: Request) {
   const session = await getSession(req);
   if (session?.role !== 'admin') return Response.json({ error: 'אין הרשאה' }, { status: 403 });
   const body = await req.json().catch(() => ({}));
   const { weekStart, includeFriday = false } = body as { weekStart?: string; includeFriday?: boolean };
-  if (!weekStart) return Response.json({ error: 'שבוע לא תקין' }, { status: 400 });
+  if (!weekStart || !DATE_RE.test(weekStart) || weekStartOf(weekStart) !== weekStart) {
+    return Response.json({ error: 'שבוע לא תקין' }, { status: 400 });
+  }
 
   const dates = weekDates(weekStart, includeFriday);
   const technicians = await prisma.technician.findMany({ where: { isAdmin: false }, select: { id: true } });

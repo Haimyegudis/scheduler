@@ -34,17 +34,22 @@ export default function AdminAbsencesClient() {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const [absRes, usersRes] = await Promise.all([
-      fetch('/api/admin/absences'),
-      fetch('/api/admin/users'),
-    ]);
-    if (absRes.ok) setAbsences((await absRes.json()).absences);
-    if (usersRes.ok) {
-      const users = (await usersRes.json()).users as Array<Tech & { isAdmin: boolean }>;
-      setTechs(users.filter(u => !u.isAdmin));
+    try {
+      const [absRes, usersRes] = await Promise.all([
+        fetch('/api/admin/absences'),
+        fetch('/api/admin/users'),
+      ]);
+      if (absRes.ok) setAbsences((await absRes.json()).absences);
+      if (usersRes.ok) {
+        const users = (await usersRes.json()).users as Array<Tech & { isAdmin: boolean }>;
+        setTechs(users.filter(u => !u.isAdmin));
+      }
+    } catch {
+      setError(t('networkErrorRefresh'));
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     load();
@@ -53,31 +58,44 @@ export default function AdminAbsencesClient() {
   async function add(e: React.FormEvent) {
     e.preventDefault();
     setError('');
-    const res = await fetch('/api/admin/absences', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        technicianId: Number(form.technicianId),
-        startDate: form.startDate,
-        endDate: form.endDate,
-        type: form.type,
-      }),
-    });
-    if (res.ok) {
-      setForm({ technicianId: '', type: 'vacation', startDate: '', endDate: '' });
-      await load();
-    } else {
-      const data = await res.json().catch(() => ({}));
-      setError(data.error ? translateApiError(lang, data.error) : t('genericError'));
+    try {
+      const res = await fetch('/api/admin/absences', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          technicianId: Number(form.technicianId),
+          startDate: form.startDate,
+          endDate: form.endDate,
+          type: form.type,
+        }),
+      });
+      if (res.ok) {
+        setForm({ technicianId: '', type: 'vacation', startDate: '', endDate: '' });
+        await load();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error ? translateApiError(lang, data.error) : t('genericError'));
+      }
+    } catch {
+      setError(t('networkError'));
     }
   }
 
   async function remove(id: number) {
-    await fetch('/api/admin/absences', {
-      method: 'DELETE',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ id }),
-    });
+    setError('');
+    try {
+      const res = await fetch('/api/admin/absences', {
+        method: 'DELETE',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error ? translateApiError(lang, data.error) : t('deleteFailed'));
+      }
+    } catch {
+      setError(t('networkError'));
+    }
     await load();
   }
 

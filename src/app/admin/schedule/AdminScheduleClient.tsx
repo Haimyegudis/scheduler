@@ -74,16 +74,16 @@ export default function AdminScheduleClient() {
 
   const dates = weekDates(weekStart, includeFriday);
 
-  const assignmentsPayload = useMemo(
-    () =>
-      Object.entries(cells)
-        .filter(([, techId]) => techId !== '')
-        .map(([k, technicianId]) => {
-          const [date, shift, station] = k.split('|');
-          return { date, shift, station: Number(station), technicianId: technicianId as number };
-        }),
-    [cells]
-  );
+  const assignmentsPayload = useMemo(() => {
+    const validDates = new Set(weekDates(weekStart, includeFriday));
+    return Object.entries(cells)
+      .filter(([, techId]) => techId !== '')
+      .map(([k, technicianId]) => {
+        const [date, shift, station] = k.split('|');
+        return { date, shift, station: Number(station), technicianId: technicianId as number };
+      })
+      .filter(a => validDates.has(a.date));
+  }, [cells, weekStart, includeFriday]);
 
   const shiftCounts = useMemo(() => {
     const counts = new Map<number, number>();
