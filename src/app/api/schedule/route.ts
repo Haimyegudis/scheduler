@@ -28,8 +28,9 @@ export async function GET(req: Request) {
     select: { id: true, name: true },
     orderBy: { name: 'asc' },
   });
+  const referencedStationIds = schedule ? [...new Set(schedule.assignments.map(a => a.stationId))] : [];
   const stations = await prisma.station.findMany({
-    where: { active: true },
+    where: { OR: [{ active: true }, { id: { in: referencedStationIds } }] },
     select: { id: true, name: true, position: true },
     orderBy: { position: 'asc' },
   });

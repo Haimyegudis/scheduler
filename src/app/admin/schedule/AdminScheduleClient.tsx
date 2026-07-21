@@ -99,10 +99,18 @@ export default function AdminScheduleClient() {
   }, [weekStart, load]);
 
   const dates = weekDates(weekStart, includeFriday);
-  const activeStations = useMemo(
-    () => stations.filter(s => s.active).sort((a, b) => a.position - b.position),
-    [stations]
-  );
+  // Board shows active stations plus any station referenced by currently loaded
+  // cells, so historical assignments on a since-deactivated station stay visible.
+  const boardStations = useMemo(() => {
+    const referencedIds = new Set(
+      Object.keys(cells)
+        .map(k => Number(k.split('|')[2]))
+        .filter(id => !Number.isNaN(id))
+    );
+    return stations
+      .filter(s => s.active || referencedIds.has(s.id))
+      .sort((a, b) => a.position - b.position);
+  }, [stations, cells]);
 
   const assignmentsPayload = useMemo(() => {
     const validDates = new Set(weekDates(weekStart, includeFriday));
@@ -363,7 +371,7 @@ export default function AdminScheduleClient() {
               </span>
             </div>
             {message && <p className="text-sm text-blue-700 mb-3">{message}</p>}
-            {activeStations.length === 0 ? (
+            {boardStations.length === 0 ? (
               <p className="text-center text-gray-500 py-8">{t('noActiveStationsBoardHint')}</p>
             ) : (
               <div className="overflow-x-auto">
@@ -381,9 +389,13 @@ export default function AdminScheduleClient() {
                   </thead>
                   <tbody>
                     {SHIFTS.map(shift =>
-                      activeStations.map(station => (
+                      boardStations.map(station => (
                         <tr key={`${shift}-${station.id}`}>
-                          <td className="border p-2 bg-gray-50 whitespace-nowrap">
+                          <td
+                            className={`border p-2 bg-gray-50 whitespace-nowrap ${
+                              station.active ? '' : 'text-gray-400'
+                            }`}
+                          >
                             {shiftLabel(lang, shift)} · {station.name}
                           </td>
                           {dates.map(date => {

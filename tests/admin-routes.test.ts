@@ -213,6 +213,22 @@ test('technician sees schedule only after publish; admin always', async () => {
   expect(data.technicians.length).toBe(10);
 });
 
+test('GET /api/schedule still includes a station referenced by assignments after it is deactivated', async () => {
+  const res = await saveSchedule(await adminReq('PUT', '/x', {
+    weekStart: WEEK,
+    includeFriday: false,
+    assignments: [{ date: DATES[0], shift: 'morning', stationId: stationIds[0], technicianId: techIds[0] }],
+  }));
+  expect(res.status).toBe(200);
+
+  await prisma.station.update({ where: { id: stationIds[0] }, data: { active: false } });
+
+  const view = await getSchedule(await adminReq('GET', `/api/schedule?weekStart=${WEEK}`));
+  expect(view.status).toBe(200);
+  const data = await view.json();
+  expect(data.stations.map((s: { id: number }) => s.id)).toContain(stationIds[0]);
+});
+
 test('publish 404s when no schedule exists', async () => {
   expect((await publish(await adminReq('POST', '/x', { weekStart: '2030-01-06' }))).status).toBe(404);
 });

@@ -61,7 +61,7 @@ export default function ScheduleTable({
                 {dates.map(date => {
                   const a = cell(date, shift, station.id);
                   const mine = a && a.technicianId !== null && a.technicianId === highlightTechId;
-                  const empty = !a || (a.technicianId === null && !a.experimenter);
+                  const empty = !a || (a.technicianId === null && !a.experimenter && !a.note);
                   return (
                     <td
                       key={date}
