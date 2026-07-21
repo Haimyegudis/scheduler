@@ -124,15 +124,17 @@ export default function AdminUsersClient({ myUserId }: { myUserId: number }) {
   return (
     <div>
       <NavBar name={t('adminName')} links={ADMIN_LINKS} />
-      <main className="max-w-3xl mx-auto p-4 space-y-8">
-        {error && <p className="text-red-600 text-sm">{error}</p>}
+      <main className="mx-auto max-w-3xl space-y-8 p-4 sm:p-6">
+        {error && (
+          <p className="rounded-xl border border-rose-100 bg-rose-50 p-3 text-sm text-rose-700">{error}</p>
+        )}
         {loading ? (
           <Loading />
         ) : (
-          <>
+          <div className="animate-fade-up space-y-8">
             <section>
-              <h2 className="font-bold mb-2">{t('allowedEmailsHeading')}</h2>
-              <form onSubmit={addEmail} className="flex gap-2 mb-3">
+              <h2 className="mb-3 font-bold text-slate-900">{t('allowedEmailsHeading')}</h2>
+              <form onSubmit={addEmail} className="mb-3 flex gap-2">
                 <input
                   type="email"
                   required
@@ -140,20 +142,20 @@ export default function AdminUsersClient({ myUserId }: { myUserId: number }) {
                   value={newEmail}
                   onChange={e => setNewEmail(e.target.value)}
                   placeholder="tech@example.com"
-                  className="border rounded px-3 py-2 flex-1"
+                  className="field flex-1"
                 />
-                <button type="submit" className="bg-blue-600 text-white rounded px-4 py-2 hover:bg-blue-700">
+                <button type="submit" className="btn-primary">
                   {t('addBtn')}
                 </button>
               </form>
               {emails.length === 0 ? (
-                <p className="text-gray-500 text-sm">{t('noEmailsYetNote')}</p>
+                <p className="text-sm text-slate-500">{t('noEmailsYetNote')}</p>
               ) : (
-                <ul className="bg-white rounded-lg shadow-sm divide-y">
+                <ul className="surface-card divide-y divide-slate-100">
                   {emails.map(e => (
-                    <li key={e.id} className="flex items-center justify-between px-3 py-2">
-                      <span dir="ltr">{e.email}</span>
-                      <button onClick={() => removeEmail(e.email)} className="text-red-600 text-sm hover:underline">
+                    <li key={e.id} className="flex items-center justify-between px-4 py-2.5">
+                      <span dir="ltr" className="text-sm text-slate-700">{e.email}</span>
+                      <button onClick={() => removeEmail(e.email)} className="link-danger text-sm">
                         {t('removeBtn')}
                       </button>
                     </li>
@@ -162,49 +164,53 @@ export default function AdminUsersClient({ myUserId }: { myUserId: number }) {
               )}
             </section>
             <section>
-              <h2 className="font-bold mb-2">{t('registeredUsersHeading')}</h2>
-              <table className="w-full bg-white rounded-lg shadow-sm text-sm border-collapse">
-                <thead>
-                  <tr>
-                    <th className="border p-2 bg-gray-100 text-start">{t('nameCol')}</th>
-                    <th className="border p-2 bg-gray-100 text-start">{t('emailCol')}</th>
-                    <th className="border p-2 bg-gray-100">{t('adminCol')}</th>
-                    <th className="border p-2 bg-gray-100"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map(u => (
-                    <tr key={u.id}>
-                      <td className="border p-2">{u.name}{u.id === myUserId && ` ${t('meSuffix')}`}</td>
-                      <td className="border p-2" dir="ltr">{u.email}</td>
-                      <td className="border p-2 text-center">
-                        <input
-                          type="checkbox"
-                          checked={u.isAdmin}
-                          disabled={u.id === myUserId}
-                          onChange={() => toggleAdmin(u)}
-                        />
-                      </td>
-                      <td className="border p-2 text-center">
-                        <button
-                          onClick={() => deleteUser(u)}
-                          disabled={u.id === myUserId}
-                          className={`text-sm ${
-                            u.id === myUserId ? 'text-gray-300 cursor-not-allowed' : 'text-red-600 hover:underline'
-                          }`}
-                        >
-                          {t('deleteUserBtn')}
-                        </button>
-                      </td>
+              <h2 className="mb-3 font-bold text-slate-900">{t('registeredUsersHeading')}</h2>
+              <div className="surface-card scroll-thin overflow-x-auto">
+                <table className="table-shell">
+                  <thead>
+                    <tr>
+                      <th className="th-cell text-start">{t('nameCol')}</th>
+                      <th className="th-cell text-start">{t('emailCol')}</th>
+                      <th className="th-cell text-center">{t('adminCol')}</th>
+                      <th className="th-cell"></th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-              <p className="text-xs text-gray-400 mt-2">
-                {t('adminPermNote')}
-              </p>
+                  </thead>
+                  <tbody>
+                    {users.map(u => (
+                      <tr key={u.id} className="odd:bg-white even:bg-slate-50/40">
+                        <td className="td-cell text-slate-800">
+                          {u.name}
+                          {u.id === myUserId && <span className="ms-1 text-slate-400">{t('meSuffix')}</span>}
+                        </td>
+                        <td className="td-cell" dir="ltr">{u.email}</td>
+                        <td className="td-cell text-center">
+                          <input
+                            type="checkbox"
+                            checked={u.isAdmin}
+                            disabled={u.id === myUserId}
+                            onChange={() => toggleAdmin(u)}
+                            className="h-4 w-4 accent-brand-600"
+                          />
+                        </td>
+                        <td className="td-cell text-center">
+                          <button
+                            onClick={() => deleteUser(u)}
+                            disabled={u.id === myUserId}
+                            className={
+                              u.id === myUserId ? 'cursor-not-allowed text-sm text-slate-300' : 'link-danger text-sm'
+                            }
+                          >
+                            {t('deleteUserBtn')}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-2 text-xs text-slate-400">{t('adminPermNote')}</p>
             </section>
-          </>
+          </div>
         )}
       </main>
     </div>

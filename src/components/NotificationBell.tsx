@@ -75,18 +75,18 @@ export default function NotificationBell() {
   if (!supported || permission === 'granted') return null;
 
   return (
-    <span className="flex items-center gap-1">
+    <span className="flex items-center gap-1.5">
       <button
         type="button"
         onClick={enable}
         disabled={busy}
         title={t('enableNotificationsBtn')}
         aria-label={t('enableNotificationsBtn')}
-        className="text-lg leading-none hover:opacity-70 disabled:opacity-50"
+        className="flex h-8 w-8 items-center justify-center rounded-full text-lg leading-none transition hover:bg-slate-100 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
       >
         🔔
       </button>
-      {error && <span className="text-red-600 text-xs">{error}</span>}
+      {error && <span className="text-xs text-rose-600">{error}</span>}
     </span>
   );
 }

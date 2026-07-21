@@ -1,5 +1,159 @@
 @import "tailwindcss";
 
+@theme {
+  --font-sans: var(--font-heebo), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+
+  /* HP Indigo cyan family, anchored on brand-500 = #0aa8dc */
+  --color-brand-50: #eefbfe;
+  --color-brand-100: #d3f3fb;
+  --color-brand-200: #a8e6f6;
+  --color-brand-300: #71d3ee;
+  --color-brand-400: #34b7e0;
+  --color-brand-500: #0aa8dc;
+  --color-brand-600: #0786b3;
+  --color-brand-700: #08698e;
+  --color-brand-800: #0c5473;
+  --color-brand-900: #0f4560;
+  --color-brand-950: #082c3f;
+}
+
+html {
+  color-scheme: light;
+}
+
 body {
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: var(--font-sans);
+  background-color: #f4f8fa;
+  background-image:
+    radial-gradient(1100px 480px at 8% -12%, color-mix(in srgb, var(--color-brand-200) 40%, transparent), transparent 60%),
+    radial-gradient(900px 460px at 105% 0%, color-mix(in srgb, var(--color-brand-100) 55%, transparent), transparent 55%);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--color-brand-200);
+  color: var(--color-brand-950);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Slim, brand-tinted scrollbars for horizontally scrolling tables/boards */
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-brand-300) transparent;
+}
+.scroll-thin::-webkit-scrollbar {
+  height: 9px;
+  width: 9px;
+}
+.scroll-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  background-color: var(--color-brand-300);
+  border-radius: 999px;
+}
+.scroll-thin::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-brand-400);
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fade-up {
+  animation: fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes logo-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.07);
+    opacity: 0.82;
+  }
+}
+.animate-logo-breathe {
+  animation: logo-breathe 1.7s ease-in-out infinite;
+}
+
+@keyframes ring-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.animate-ring-spin {
+  animation: ring-spin 0.9s linear infinite;
+}
+
+@layer components {
+  .surface-card {
+    @apply rounded-2xl border border-slate-200/70 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_10px_28px_-16px_rgba(15,23,42,0.18)];
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-150 active:scale-[.97] disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 bg-linear-to-br from-brand-600 to-brand-700 text-white shadow-md shadow-brand-900/20 hover:from-brand-700 hover:to-brand-800 hover:shadow-lg hover:shadow-brand-900/25;
+  }
+  .btn-success {
+    @apply inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-150 active:scale-[.97] disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 bg-linear-to-br from-emerald-600 to-emerald-700 text-white shadow-md shadow-emerald-900/20 hover:from-emerald-700 hover:to-emerald-800 hover:shadow-lg;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-150 active:scale-[.97] disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 border border-slate-200 bg-white text-slate-700 shadow-sm hover:border-slate-300 hover:bg-slate-50;
+  }
+  .btn-sm {
+    @apply rounded-lg px-3 py-1.5 text-xs;
+  }
+
+  .link-danger {
+    @apply rounded font-medium text-rose-600 underline-offset-2 transition hover:text-rose-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2;
+  }
+  .link-brand {
+    @apply font-semibold text-brand-700 underline-offset-2 transition hover:text-brand-800 hover:underline;
+  }
+
+  .field {
+    @apply w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-brand-400 focus:ring-4 focus:ring-brand-100;
+  }
+  .field-sm {
+    @apply rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 shadow-sm outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100 sm:text-sm;
+  }
+
+  .table-shell {
+    @apply w-full border-separate border-spacing-0 text-sm;
+  }
+  .th-cell {
+    @apply border-b border-slate-200 bg-slate-50 p-3 text-xs font-semibold tracking-wide text-slate-500 uppercase;
+  }
+  .td-cell {
+    @apply border-b border-slate-100 p-3 text-sm text-slate-700;
+  }
+
+  .pill {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 shadow-sm;
+  }
+  .badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold;
+  }
+
+  .nav-link {
+    @apply rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900;
+  }
+  .nav-link-active {
+    @apply rounded-lg bg-brand-50 px-3 py-2 text-sm font-semibold text-brand-700 ring-1 ring-brand-200 ring-inset;
+  }
 }

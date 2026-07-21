@@ -47,16 +47,23 @@ export default function ScheduleClient({ name, technicianId }: { name: string; t
   return (
     <div>
       <NavBar name={name} links={TECH_LINKS} />
-      <main className="max-w-5xl mx-auto p-4">
+      <main className="mx-auto max-w-5xl p-4 sm:p-6">
         <WeekNav weekStart={weekStart} onChange={setWeekStart} />
-        {error && <p role="alert" className="text-red-600 text-sm mb-2">{error}</p>}
+        {error && (
+          <p role="alert" className="mb-4 rounded-xl border border-rose-100 bg-rose-50 p-3 text-sm text-rose-700">
+            {error}
+          </p>
+        )}
         {!data && !error ? (
           <Loading />
         ) : error && !data ? null : !data ? null : !data.schedule ? (
-          <p className="text-center text-gray-500 py-8">{t('noScheduleYet')}</p>
+          <p className="py-16 text-center text-slate-500">{t('noScheduleYet')}</p>
         ) : (
-          <>
-            <p className="text-sm text-gray-500 mb-2">{t('yourShiftsHighlighted')}</p>
+          <div className="animate-fade-up">
+            <p className="mb-3 flex items-center gap-2 text-sm text-slate-500">
+              <span className="inline-block h-2.5 w-2.5 rounded-sm bg-brand-100 ring-1 ring-brand-200" />
+              {t('yourShiftsHighlighted')}
+            </p>
             <ScheduleTable
               dates={weekDates(weekStart, data.schedule.includeFriday)}
               assignments={data.schedule.assignments}
@@ -64,7 +71,7 @@ export default function ScheduleClient({ name, technicianId }: { name: string; t
               stations={data.stations}
               highlightTechId={technicianId}
             />
-          </>
+          </div>
         )}
       </main>
     </div>

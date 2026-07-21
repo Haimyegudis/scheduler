@@ -36,6 +36,8 @@ const he = {
 
   shiftStationHeader: 'משמרת / עמדה',
   stationLabel: 'עמדה',
+  assignTechnicianAria: 'שיבוץ טכנאי לתא',
+  closeLabel: 'סגור',
 
   weekPublishedNotice: 'התוכנית לשבוע זה פורסמה — לא ניתן לשנות אילוצים.',
   loadError: 'שגיאה בטעינת נתונים',
@@ -203,6 +205,8 @@ const en: Record<keyof typeof he, string> = {
 
   shiftStationHeader: 'Shift / Station',
   stationLabel: 'Station',
+  assignTechnicianAria: 'Assign technician to cell',
+  closeLabel: 'Close',
 
   weekPublishedNotice: 'This week’s schedule has been published — constraints can no longer be changed.',
   loadError: 'Error loading data',

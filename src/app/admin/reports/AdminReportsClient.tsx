@@ -133,15 +133,15 @@ export default function AdminReportsClient() {
   return (
     <div>
       <NavBar name={t('adminName')} links={ADMIN_LINKS} />
-      <main className="max-w-3xl mx-auto p-4 space-y-4">
-        <div className="bg-white rounded-lg shadow-sm p-4 flex flex-wrap items-end gap-3">
+      <main className="mx-auto max-w-3xl space-y-4 p-4 sm:p-6">
+        <div className="surface-card flex flex-wrap items-end gap-3 p-4">
           {mode === 'vacations' ? (
-            <label className="block text-sm">
+            <label className="block text-sm text-slate-600">
               {t('yearLabel')}
               <select
                 value={year}
                 onChange={e => setYear(e.target.value)}
-                className="block mt-1 border rounded px-2 py-1.5"
+                className="field-sm mt-1 block"
               >
                 {Array.from({ length: 5 }, (_, i) => String(new Date().getFullYear() - 2 + i)).map(y => (
                   <option key={y} value={y}>{y}</option>
@@ -149,22 +149,22 @@ export default function AdminReportsClient() {
               </select>
             </label>
           ) : (
-            <label className="block text-sm">
+            <label className="block text-sm text-slate-600">
               {t('monthLabel')}
               <input
                 type="month"
                 value={month}
                 onChange={e => setMonth(e.target.value)}
-                className="block mt-1 border rounded px-2 py-1.5"
+                className="field-sm mt-1 block"
               />
             </label>
           )}
-          <label className="block text-sm">
+          <label className="block text-sm text-slate-600">
             {t('viewModeLabel')}
             <select
               value={mode}
               onChange={e => setMode(e.target.value as 'worker' | 'machine' | 'vacations')}
-              className="block mt-1 border rounded px-2 py-1.5"
+              className="field-sm mt-1 block"
             >
               <option value="worker">{t('byWorkerOption')}</option>
               <option value="machine">{t('byMachineOption')}</option>
@@ -172,12 +172,12 @@ export default function AdminReportsClient() {
             </select>
           </label>
           {mode === 'worker' ? (
-            <label className="block text-sm">
+            <label className="block text-sm text-slate-600">
               {t('employeeLabel')}
               <select
                 value={workerId}
                 onChange={e => setWorkerId(e.target.value)}
-                className="block mt-1 border rounded px-2 py-1.5 min-w-36"
+                className="field-sm mt-1 block min-w-36"
               >
                 <option value="">{t('selectEmployeeOption')}</option>
                 {techs.map(tc => (
@@ -186,12 +186,12 @@ export default function AdminReportsClient() {
               </select>
             </label>
           ) : mode === 'machine' ? (
-            <label className="block text-sm">
+            <label className="block text-sm text-slate-600">
               {t('machineStationLabel')}
               <select
                 value={station}
                 onChange={e => setStation(e.target.value)}
-                className="block mt-1 border rounded px-2 py-1.5"
+                className="field-sm mt-1 block"
               >
                 {stations.map(s => (
                   <option key={s.id} value={s.id}>{s.name}</option>
@@ -203,85 +203,87 @@ export default function AdminReportsClient() {
         {loading ? (
           <Loading />
         ) : mode === 'worker' && !workerId ? (
-          <p className="text-center text-gray-500 py-8">{t('selectEmployeeToShowReport')}</p>
+          <p className="py-16 text-center text-slate-500">{t('selectEmployeeToShowReport')}</p>
         ) : mode === 'vacations' ? (
-          <>
-            <div className="overflow-x-auto">
-              <table className="w-full bg-white rounded-lg shadow-sm text-sm border-collapse">
+          <div className="animate-fade-up">
+            <div className="surface-card scroll-thin overflow-x-auto">
+              <table className="table-shell">
                 <thead>
                   <tr>
-                    <th className="border p-2 bg-gray-100 text-start">{t('employeeLabel')}</th>
-                    <th className="border p-2 bg-gray-100">{t('vacationCol')}</th>
-                    <th className="border p-2 bg-gray-100">{t('sickCol')}</th>
-                    <th className="border p-2 bg-gray-100">{t('miluimCol')}</th>
-                    <th className="border p-2 bg-gray-100">{t('otherCol')}</th>
-                    <th className="border p-2 bg-gray-100">{t('offMarkedCol')}</th>
-                    <th className="border p-2 bg-gray-100">{t('totalAbsenceCol')}</th>
+                    <th className="th-cell text-start">{t('employeeLabel')}</th>
+                    <th className="th-cell text-center">{t('vacationCol')}</th>
+                    <th className="th-cell text-center">{t('sickCol')}</th>
+                    <th className="th-cell text-center">{t('miluimCol')}</th>
+                    <th className="th-cell text-center">{t('otherCol')}</th>
+                    <th className="th-cell text-center">{t('offMarkedCol')}</th>
+                    <th className="th-cell text-center">{t('totalAbsenceCol')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {summary.map(s => (
-                    <tr key={s.technicianId}>
-                      <td className="border p-2 font-semibold">{s.name}</td>
-                      <td className="border p-2 text-center">{s.vacation}</td>
-                      <td className="border p-2 text-center">{s.sick}</td>
-                      <td className="border p-2 text-center">{s.miluim}</td>
-                      <td className="border p-2 text-center">{s.other}</td>
-                      <td className="border p-2 text-center">{s.offMarked}</td>
-                      <td className="border p-2 text-center font-bold">{s.total}</td>
+                    <tr key={s.technicianId} className="odd:bg-white even:bg-slate-50/40">
+                      <td className="td-cell font-semibold text-slate-800">{s.name}</td>
+                      <td className="td-cell text-center">{s.vacation}</td>
+                      <td className="td-cell text-center">{s.sick}</td>
+                      <td className="td-cell text-center">{s.miluim}</td>
+                      <td className="td-cell text-center">{s.other}</td>
+                      <td className="td-cell text-center">{s.offMarked}</td>
+                      <td className="td-cell text-center font-bold text-brand-700">{s.total}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            <h3 className="font-bold mt-4 mb-2">{t('absenceDetailsHeading')} ({year})</h3>
+            <h3 className="mt-6 mb-2 font-bold text-slate-900">
+              {t('absenceDetailsHeading')} ({year})
+            </h3>
             {absenceRows.filter(a => a.startDate <= `${year}-12-31` && a.endDate >= `${year}-01-01`).length === 0 ? (
-              <p className="text-gray-500 text-sm">{t('noAbsencesThisYear')}</p>
+              <p className="text-sm text-slate-500">{t('noAbsencesThisYear')}</p>
             ) : (
-              <ul className="bg-white rounded-lg shadow-sm divide-y text-sm">
+              <ul className="surface-card divide-y divide-slate-100 text-sm">
                 {absenceRows
                   .filter(a => a.startDate <= `${year}-12-31` && a.endDate >= `${year}-01-01`)
                   .map(a => (
-                    <li key={a.id} className="px-3 py-2 flex flex-wrap gap-2">
-                      <span className="font-semibold">{a.technicianName}</span>
-                      <span>{absenceLabel(lang, a.type)}</span>
-                      <span className="text-gray-500">
+                    <li key={a.id} className="flex flex-wrap items-center gap-2 px-4 py-3">
+                      <span className="font-semibold text-slate-800">{a.technicianName}</span>
+                      <span className="text-slate-600">{absenceLabel(lang, a.type)}</span>
+                      <span className="text-slate-500">
                         {formatDate(a.startDate)} – {formatDate(a.endDate)}
                       </span>
                     </li>
                   ))}
               </ul>
             )}
-          </>
+          </div>
         ) : (
-          <>
-            <div className="flex gap-2 text-sm">
-              <span className="bg-white border rounded-full px-3 py-1">{t('totalLabel')} {filtered.length}</span>
-              <span className="bg-white border rounded-full px-3 py-1">{shiftLabel(lang, 'morning')}: {morningCount}</span>
-              <span className="bg-white border rounded-full px-3 py-1">{shiftLabel(lang, 'evening')}: {eveningCount}</span>
+          <div className="animate-fade-up">
+            <div className="mb-3 flex flex-wrap gap-2 text-sm">
+              <span className="pill">{t('totalLabel')} {filtered.length}</span>
+              <span className="pill">{shiftLabel(lang, 'morning')}: {morningCount}</span>
+              <span className="pill">{shiftLabel(lang, 'evening')}: {eveningCount}</span>
             </div>
             {filtered.length === 0 ? (
-              <p className="text-gray-500 text-sm">{t('noShiftsInPeriod')}</p>
+              <p className="text-sm text-slate-500">{t('noShiftsInPeriod')}</p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full bg-white rounded-lg shadow-sm text-sm border-collapse">
+              <div className="surface-card scroll-thin overflow-x-auto">
+                <table className="table-shell">
                   <thead>
                     <tr>
-                      <th className="border p-2 bg-gray-100">{t('dateCol')}</th>
-                      <th className="border p-2 bg-gray-100">{t('dayCol')}</th>
-                      <th className="border p-2 bg-gray-100">{t('shiftCol')}</th>
-                      <th className="border p-2 bg-gray-100">
+                      <th className="th-cell text-center">{t('dateCol')}</th>
+                      <th className="th-cell text-center">{t('dayCol')}</th>
+                      <th className="th-cell text-center">{t('shiftCol')}</th>
+                      <th className="th-cell text-center">
                         {mode === 'worker' ? t('machineStationLabel') : t('employeeLabel')}
                       </th>
                     </tr>
                   </thead>
                   <tbody>
                     {filtered.map((r, i) => (
-                      <tr key={i}>
-                        <td className="border p-2 text-center">{formatDate(r.date)}</td>
-                        <td className="border p-2 text-center">{dayName(r.date, lang)}</td>
-                        <td className="border p-2 text-center">{shiftLabel(lang, r.shift)}</td>
-                        <td className="border p-2 text-center">
+                      <tr key={i} className="odd:bg-white even:bg-slate-50/40">
+                        <td className="td-cell text-center">{formatDate(r.date)}</td>
+                        <td className="td-cell text-center">{dayName(r.date, lang)}</td>
+                        <td className="td-cell text-center">{shiftLabel(lang, r.shift)}</td>
+                        <td className="td-cell text-center">
                           {mode === 'worker' ? r.stationName : (r.technicianName ?? '—')}
                         </td>
                       </tr>
@@ -290,7 +292,7 @@ export default function AdminReportsClient() {
                 </table>
               </div>
             )}
-          </>
+          </div>
         )}
       </main>
     </div>

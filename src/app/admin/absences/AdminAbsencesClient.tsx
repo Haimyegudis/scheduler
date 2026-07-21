@@ -102,17 +102,17 @@ export default function AdminAbsencesClient() {
   return (
     <div>
       <NavBar name={t('adminName')} links={ADMIN_LINKS} />
-      <main className="max-w-3xl mx-auto p-4 space-y-6">
+      <main className="mx-auto max-w-3xl space-y-6 p-4 sm:p-6">
         <section>
-          <h2 className="font-bold mb-2">{t('addAbsenceHeading')}</h2>
-          <form onSubmit={add} className="bg-white rounded-lg shadow-sm p-4 flex flex-wrap items-end gap-3">
-            <label className="block text-sm">
+          <h2 className="mb-3 font-bold text-slate-900">{t('addAbsenceHeading')}</h2>
+          <form onSubmit={add} className="surface-card flex flex-wrap items-end gap-3 p-4">
+            <label className="block text-sm text-slate-600">
               {t('employeeLabel')}
               <select
                 required
                 value={form.technicianId}
                 onChange={e => setForm(f => ({ ...f, technicianId: e.target.value }))}
-                className="block mt-1 border rounded px-2 py-1.5 min-w-36"
+                className="field-sm mt-1 block min-w-36"
               >
                 <option value="">{t('selectEmployeeOption')}</option>
                 {techs.map(tc => (
@@ -120,81 +120,81 @@ export default function AdminAbsencesClient() {
                 ))}
               </select>
             </label>
-            <label className="block text-sm">
+            <label className="block text-sm text-slate-600">
               {t('typeLabel')}
               <select
                 value={form.type}
                 onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
-                className="block mt-1 border rounded px-2 py-1.5"
+                className="field-sm mt-1 block"
               >
                 {absenceEntries(lang).map(([value, label]) => (
                   <option key={value} value={value}>{label}</option>
                 ))}
               </select>
             </label>
-            <label className="block text-sm">
+            <label className="block text-sm text-slate-600">
               {t('fromDateLabel')}
               <input
                 type="date"
                 required
                 value={form.startDate}
                 onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))}
-                className="block mt-1 border rounded px-2 py-1.5"
+                className="field-sm mt-1 block"
               />
             </label>
-            <label className="block text-sm">
+            <label className="block text-sm text-slate-600">
               {t('toDateInclusiveLabel')}
               <input
                 type="date"
                 required
                 value={form.endDate}
                 onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))}
-                className="block mt-1 border rounded px-2 py-1.5"
+                className="field-sm mt-1 block"
               />
             </label>
-            <button type="submit" className="bg-blue-600 text-white rounded px-4 py-2 hover:bg-blue-700">
+            <button type="submit" className="btn-primary">
               {t('addBtn')}
             </button>
           </form>
-          {error && <p className="text-red-600 text-sm mt-2">{error}</p>}
+          {error && <p className="mt-2 text-sm text-rose-600">{error}</p>}
         </section>
         <section>
-          <h2 className="font-bold mb-2">{t('absencesHeading')}</h2>
+          <h2 className="mb-3 font-bold text-slate-900">{t('absencesHeading')}</h2>
           {loading ? (
-            <p className="text-center text-gray-500 py-8">{t('loading')}</p>
+            <p className="py-8 text-center text-slate-500">{t('loading')}</p>
           ) : absences.length === 0 ? (
-            <p className="text-gray-500 text-sm">{t('noAbsencesNote')}</p>
+            <p className="text-sm text-slate-500">{t('noAbsencesNote')}</p>
           ) : (
-            <table className="w-full bg-white rounded-lg shadow-sm text-sm border-collapse">
-              <thead>
-                <tr>
-                  <th className="border p-2 bg-gray-100 text-start">{t('employeeLabel')}</th>
-                  <th className="border p-2 bg-gray-100">{t('typeLabel')}</th>
-                  <th className="border p-2 bg-gray-100">{t('fromDateLabel')}</th>
-                  <th className="border p-2 bg-gray-100">{t('toDateCol')}</th>
-                  <th className="border p-2 bg-gray-100"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {absences.map(a => (
-                  <tr key={a.id}>
-                    <td className="border p-2">{a.technicianName}</td>
-                    <td className="border p-2 text-center">
-                      <span className={`px-2 py-0.5 rounded-full text-xs ${ABSENCE_COLORS[a.type]}`}>
-                        {absenceLabel(lang, a.type)}
-                      </span>
-                    </td>
-                    <td className="border p-2 text-center">{formatDate(a.startDate)}</td>
-                    <td className="border p-2 text-center">{formatDate(a.endDate)}</td>
-                    <td className="border p-2 text-center">
-                      <button onClick={() => remove(a.id)} className="text-red-600 hover:underline">
-                        {t('deleteBtn')}
-                      </button>
-                    </td>
+            <div className="surface-card scroll-thin overflow-x-auto">
+              <table className="table-shell">
+                <thead>
+                  <tr>
+                    <th className="th-cell text-start">{t('employeeLabel')}</th>
+                    <th className="th-cell text-center">{t('typeLabel')}</th>
+                    <th className="th-cell text-center">{t('fromDateLabel')}</th>
+                    <th className="th-cell text-center">{t('toDateCol')}</th>
+                    <th className="th-cell"></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {absences.map(a => (
+                    <tr key={a.id} className="odd:bg-white even:bg-slate-50/40">
+                      <td className="td-cell text-slate-800">{a.technicianName}</td>
+                      <td className="td-cell text-center">
+                        <span className={`badge ${ABSENCE_COLORS[a.type]}`}>{absenceLabel(lang, a.type)}</span>
+                      </td>
+                      <td className="td-cell text-center">{formatDate(a.startDate)}</td>
+                      <td className="td-cell text-center">{formatDate(a.endDate)}</td>
+                      <td className="td-cell text-center">
+                        <button onClick={() => remove(a.id)} className="link-danger">
+                          {t('deleteBtn')}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </section>
       </main>

@@ -4,10 +4,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import NavBar from '@/components/NavBar';
 import WeekNav from '@/components/WeekNav';
 import Loading from '@/components/Loading';
+import ColorPopover from '@/components/ColorPopover';
 import { getCurrentWeekStart, weekDates, dayName, formatDate } from '@/lib/dates';
 import { shiftLabel, constraintLabel, absenceLabel } from '@/lib/labels';
 import { useT, translateApiError, type DictKey } from '@/lib/i18n';
-import { COLOR_TOKENS, COLOR_CLASSES, colorClass, type ColorToken } from '@/lib/cellColors';
+import { colorClass, type ColorToken } from '@/lib/cellColors';
 import { buildScheduleHtmlTable, buildScheduleText } from '@/lib/exportSchedule';
 
 const ADMIN_LINKS_KEYS = [
@@ -59,6 +60,9 @@ export default function AdminScheduleClient() {
   const [stationsMessage, setStationsMessage] = useState('');
   const [colorPopoverKey, setColorPopoverKey] = useState<CellKey | null>(null);
   const [pendingColor, setPendingColor] = useState<string | null>(null);
+  const [popoverAnchor, setPopoverAnchor] = useState<{ top: number; bottom: number; left: number; right: number } | null>(
+    null
+  );
 
   const loadStations = useCallback(async () => {
     try {
@@ -191,7 +195,9 @@ export default function AdminScheduleClient() {
     return 2;
   }
 
-  function openColorPopover(k: CellKey, current: string | null) {
+  function openColorPopover(k: CellKey, current: string | null, anchorEl: HTMLButtonElement) {
+    const r = anchorEl.getBoundingClientRect();
+    setPopoverAnchor({ top: r.top, bottom: r.bottom, left: r.left, right: r.right });
     setPendingColor(current);
     setColorPopoverKey(prev => (prev === k ? null : k));
   }
@@ -400,22 +406,28 @@ export default function AdminScheduleClient() {
   return (
     <div>
       <NavBar name={t('adminName')} links={ADMIN_LINKS} />
-      <main className="max-w-6xl mx-auto p-4">
+      <main className="mx-auto max-w-6xl p-4 sm:p-6">
         <WeekNav weekStart={weekStart} onChange={setWeekStart} />
 
-        <div className="bg-white rounded-lg shadow-sm mb-4">
+        <div className="surface-card mb-4 overflow-hidden">
           <button
             onClick={() => setStationsOpen(o => !o)}
-            className="w-full text-start px-4 py-2 font-bold flex items-center justify-between"
+            className="flex w-full items-center justify-between px-4 py-3 text-start font-bold text-slate-800 transition hover:bg-slate-50"
+            aria-expanded={stationsOpen}
           >
             <span>{t('stationsHeading')}</span>
-            <span>{stationsOpen ? '▲' : '▼'}</span>
+            <span
+              className={`text-slate-400 transition-transform duration-200 ${stationsOpen ? 'rotate-180' : ''}`}
+              aria-hidden
+            >
+              ▾
+            </span>
           </button>
           {stationsOpen && (
-            <div className="px-4 pb-4">
-              {stationsMessage && <p className="text-sm text-red-600 mb-2">{stationsMessage}</p>}
-              {stations.length === 0 && <p className="text-sm text-gray-500 mb-2">{t('noStationsHint')}</p>}
-              <ul className="divide-y mb-3">
+            <div className="border-t border-slate-100 px-4 pt-3 pb-4">
+              {stationsMessage && <p className="mb-2 text-sm text-rose-600">{stationsMessage}</p>}
+              {stations.length === 0 && <p className="mb-2 text-sm text-slate-500">{t('noStationsHint')}</p>}
+              <ul className="mb-3 divide-y divide-slate-100">
                 {stations
                   .slice()
                   .sort((a, b) => a.position - b.position)
@@ -425,11 +437,11 @@ export default function AdminScheduleClient() {
                         value={stationDrafts[s.id] ?? s.name}
                         onChange={e => setStationDrafts(d => ({ ...d, [s.id]: e.target.value }))}
                         onBlur={() => renameStation(s.id)}
-                        className={`border rounded px-2 py-1 text-sm flex-1 ${s.active ? '' : 'text-gray-400'}`}
+                        className={`field-sm flex-1 ${s.active ? '' : 'text-slate-400'}`}
                       />
                       <button
                         onClick={() => toggleStationActive(s.id, !s.active)}
-                        className="text-sm border rounded px-3 py-1 hover:bg-gray-100 whitespace-nowrap"
+                        className="btn-secondary btn-sm whitespace-nowrap"
                       >
                         {s.active ? t('deactivateBtn') : t('activateBtn')}
                       </button>
@@ -442,12 +454,9 @@ export default function AdminScheduleClient() {
                   onChange={e => setNewStationName(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && addStation()}
                   placeholder={t('stationNamePlaceholder')}
-                  className="border rounded px-2 py-1 text-sm flex-1"
+                  className="field-sm flex-1"
                 />
-                <button
-                  onClick={addStation}
-                  className="bg-blue-600 text-white rounded px-3 py-1 text-sm hover:bg-blue-700"
-                >
+                <button onClick={addStation} className="btn-primary btn-sm">
                   {t('addBtn')}
                 </button>
               </div>
@@ -458,41 +467,58 @@ export default function AdminScheduleClient() {
         {loading ? (
           <Loading />
         ) : (
-          <>
-            <div className="flex flex-wrap items-center gap-3 mb-4">
-              <button onClick={generate} className="bg-blue-600 text-white rounded px-4 py-2 hover:bg-blue-700">
+          <div className="animate-fade-up">
+            <div className="mb-4 flex flex-wrap items-center gap-2.5">
+              <button onClick={generate} className="btn-primary">
                 {t('generateScheduleBtn')}
               </button>
-              <button onClick={() => saveDraft()} className="bg-white border rounded px-4 py-2 hover:bg-gray-100">
+              <button onClick={() => saveDraft()} className="btn-secondary">
                 {t('saveDraftBtn')}
               </button>
-              <button onClick={publish} className="bg-green-600 text-white rounded px-4 py-2 hover:bg-green-700">
+              <button onClick={publish} className="btn-success">
                 {t('publishBtn')}
               </button>
-              <button onClick={copySchedule} className="bg-white border rounded px-4 py-2 hover:bg-gray-100">
+              <button onClick={copySchedule} className="btn-secondary">
                 {t('copyScheduleBtn')}
               </button>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={includeFriday} onChange={e => toggleFriday(e.target.checked)} />
+              <label className="flex items-center gap-2 text-sm text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={includeFriday}
+                  onChange={e => toggleFriday(e.target.checked)}
+                  className="h-4 w-4 accent-brand-600"
+                />
                 {t('includeFridayLabel')}
               </label>
-              <span className="ms-auto text-sm text-gray-500">
+              <span
+                className={`badge ms-auto ${
+                  status === 'published'
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : status === 'draft'
+                      ? 'bg-amber-100 text-amber-800'
+                      : 'bg-slate-100 text-slate-600'
+                }`}
+              >
                 {t('statusPrefix')} {status === 'published' ? t('statusPublished') : status === 'draft' ? t('statusDraft') : t('statusNone')}
               </span>
             </div>
-            {message && <p className="text-sm text-blue-700 mb-3">{message}</p>}
+            {message && (
+              <p className="mb-3 rounded-xl border border-brand-100 bg-brand-50 px-3 py-2 text-sm text-brand-800">
+                {message}
+              </p>
+            )}
             {boardStations.length === 0 ? (
-              <p className="text-center text-gray-500 py-8">{t('noActiveStationsBoardHint')}</p>
+              <p className="py-16 text-center text-slate-500">{t('noActiveStationsBoardHint')}</p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full bg-white rounded-lg shadow-sm text-sm border-collapse">
+              <div className="surface-card scroll-thin overflow-x-auto">
+                <table className="table-shell">
                   <thead>
                     <tr>
-                      <th className="border p-2 bg-gray-100">{t('shiftStationHeader')}</th>
+                      <th className="th-cell sticky start-0 z-20 text-start">{t('shiftStationHeader')}</th>
                       {dates.map(d => (
-                        <th key={d} className="border p-2 bg-gray-100">
+                        <th key={d} className="th-cell text-center">
                           {dayName(d, lang)}
-                          <div className="text-xs text-gray-400 font-normal">{formatDate(d)}</div>
+                          <div className="text-[11px] font-normal tracking-normal text-slate-400 normal-case">{formatDate(d)}</div>
                         </th>
                       ))}
                     </tr>
@@ -502,8 +528,8 @@ export default function AdminScheduleClient() {
                       boardStations.map(station => (
                         <tr key={`${shift}-${station.id}`}>
                           <td
-                            className={`border p-2 bg-gray-50 whitespace-nowrap ${
-                              station.active ? '' : 'text-gray-400'
+                            className={`td-cell sticky start-0 z-10 bg-slate-50 whitespace-nowrap font-semibold ${
+                              station.active ? 'text-slate-700' : 'text-slate-400'
                             }`}
                           >
                             {shiftLabel(lang, shift)} · {station.name}
@@ -514,15 +540,15 @@ export default function AdminScheduleClient() {
                             const warning = warningsFor(date, shift, v.technicianId);
                             const hasContent = v.technicianId !== '' || v.experimenter.trim() !== '' || v.note.trim() !== '';
                             const cellColorClass = colorClass(v.color);
-                            const bgClass = cellColorClass || (!hasContent ? 'bg-red-50' : '');
+                            const bgClass = cellColorClass || (!hasContent ? 'bg-rose-50/60' : '');
                             return (
-                              <td key={date} className={`relative border p-1 align-top ${bgClass}`}>
+                              <td key={date} className={`relative border-b border-slate-100 p-1.5 align-top ${bgClass}`}>
                                 <div className="flex justify-end">
                                   <button
                                     type="button"
                                     aria-label={t('colorPickerLabel')}
-                                    onClick={() => openColorPopover(k, v.color)}
-                                    className={`w-3.5 h-3.5 rounded-full border border-gray-400 shrink-0 ${
+                                    onClick={e => openColorPopover(k, v.color, e.currentTarget)}
+                                    className={`h-3.5 w-3.5 shrink-0 rounded-full border border-slate-300 shadow-sm transition hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
                                       cellColorClass || 'bg-white'
                                     }`}
                                   />
@@ -532,8 +558,8 @@ export default function AdminScheduleClient() {
                                   onChange={e =>
                                     updateCell(k, { technicianId: e.target.value === '' ? '' : Number(e.target.value) })
                                   }
-                                  aria-label={t('emptySelectOption')}
-                                  className="w-full border-0 bg-transparent text-center text-xs"
+                                  aria-label={t('assignTechnicianAria')}
+                                  className="w-full rounded-md border-0 bg-transparent text-center text-xs text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
                                 >
                                   <option value=""></option>
                                   {technicians
@@ -559,70 +585,32 @@ export default function AdminScheduleClient() {
                                   value={v.experimenter}
                                   onChange={e => updateCell(k, { experimenter: e.target.value })}
                                   placeholder={t('experimenterInputPlaceholder')}
-                                  className="w-full border rounded px-1 text-xs mt-1"
+                                  className="field-sm mt-1 w-full px-1.5 py-1 text-xs"
                                 />
                                 <input
                                   value={v.note}
                                   onChange={e => updateCell(k, { note: e.target.value })}
                                   placeholder={t('noteInputPlaceholder')}
-                                  className="w-full border rounded px-1 text-xs mt-1"
+                                  className="field-sm mt-1 w-full px-1.5 py-1 text-xs"
                                 />
-                                {warning && <div className="text-xs text-orange-600 text-center">⚠ {warning}</div>}
-                                {colorPopoverKey === k && (
-                                  <div className="absolute z-20 top-6 end-0 bg-white border rounded shadow-lg p-2 w-40 text-xs space-y-1">
-                                    <div className="grid grid-cols-4 gap-1 mb-1">
-                                      {COLOR_TOKENS.map(tok => (
-                                        <button
-                                          key={tok}
-                                          type="button"
-                                          aria-label={t(COLOR_NAME_KEYS[tok])}
-                                          onClick={() => pickColor(k, tok)}
-                                          className={`w-6 h-6 rounded ${COLOR_CLASSES[tok]} ${
-                                            pendingColor === tok ? 'ring-2 ring-blue-600' : ''
-                                          }`}
-                                        />
-                                      ))}
-                                    </div>
-                                    <button
-                                      type="button"
-                                      onClick={() => clearCellColor(k)}
-                                      className="w-full text-start px-1 py-0.5 hover:bg-gray-100 rounded"
-                                    >
-                                      {t('clearColorBtn')}
-                                    </button>
-                                    <hr />
-                                    <button
-                                      type="button"
-                                      disabled={!pendingColor}
-                                      onClick={() => applyColorToRow(shift, station.id, pendingColor)}
-                                      className="w-full text-start px-1 py-0.5 hover:bg-gray-100 rounded disabled:opacity-40"
-                                    >
-                                      {t('applyRowColorBtn')}
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => applyColorToRow(shift, station.id, null)}
-                                      className="w-full text-start px-1 py-0.5 hover:bg-gray-100 rounded"
-                                    >
-                                      {t('clearRowColorBtn')}
-                                    </button>
-                                    <hr />
-                                    <button
-                                      type="button"
-                                      disabled={!pendingColor}
-                                      onClick={() => applyColorToColumn(date, pendingColor)}
-                                      className="w-full text-start px-1 py-0.5 hover:bg-gray-100 rounded disabled:opacity-40"
-                                    >
-                                      {t('applyColumnColorBtn')}
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => applyColorToColumn(date, null)}
-                                      className="w-full text-start px-1 py-0.5 hover:bg-gray-100 rounded"
-                                    >
-                                      {t('clearColumnColorBtn')}
-                                    </button>
+                                {warning && (
+                                  <div className="mt-1 text-center text-[11px] leading-tight text-orange-600">
+                                    ⚠ {warning}
                                   </div>
+                                )}
+                                {colorPopoverKey === k && popoverAnchor && (
+                                  <ColorPopover
+                                    anchorRect={popoverAnchor}
+                                    pendingColor={pendingColor}
+                                    colorNameKeys={COLOR_NAME_KEYS}
+                                    onPick={tok => pickColor(k, tok)}
+                                    onClear={() => clearCellColor(k)}
+                                    onApplyRow={() => applyColorToRow(shift, station.id, pendingColor)}
+                                    onClearRow={() => applyColorToRow(shift, station.id, null)}
+                                    onApplyColumn={() => applyColorToColumn(date, pendingColor)}
+                                    onClearColumn={() => applyColorToColumn(date, null)}
+                                    onClose={() => setColorPopoverKey(null)}
+                                  />
                                 )}
                               </td>
                             );
@@ -634,15 +622,15 @@ export default function AdminScheduleClient() {
                 </table>
               </div>
             )}
-            <h3 className="font-bold mt-6 mb-2">{t('shiftsPerTechnicianHeading')}</h3>
+            <h3 className="mt-8 mb-2 font-bold text-slate-900">{t('shiftsPerTechnicianHeading')}</h3>
             <div className="flex flex-wrap gap-2 text-sm">
               {technicians.map(tc => (
-                <span key={tc.id} className="bg-white border rounded-full px-3 py-1">
-                  {tc.name}: {shiftCounts.get(tc.id) ?? 0}
+                <span key={tc.id} className="pill">
+                  {tc.name}: <span className="font-semibold text-slate-800">{shiftCounts.get(tc.id) ?? 0}</span>
                 </span>
               ))}
             </div>
-          </>
+          </div>
         )}
       </main>
     </div>

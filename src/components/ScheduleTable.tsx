@@ -40,15 +40,15 @@ export default function ScheduleTable({
     assignments.find(a => a.date === date && a.shift === shift && a.stationId === stationId);
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full bg-white rounded-lg shadow-sm text-sm border-collapse">
+    <div className="surface-card scroll-thin overflow-x-auto">
+      <table className="table-shell">
         <thead>
           <tr>
-            <th className="border p-2 bg-gray-100">{t('shiftStationHeader')}</th>
+            <th className="th-cell sticky start-0 z-20 text-start">{t('shiftStationHeader')}</th>
             {dates.map(d => (
-              <th key={d} className="border p-2 bg-gray-100">
+              <th key={d} className="th-cell text-center">
                 {dayName(d, lang)}
-                <div className="text-xs text-gray-400 font-normal">{formatDate(d)}</div>
+                <div className="text-[11px] font-normal tracking-normal text-slate-400 normal-case">{formatDate(d)}</div>
               </th>
             ))}
           </tr>
@@ -56,8 +56,8 @@ export default function ScheduleTable({
         <tbody>
           {(['morning', 'evening'] as const).map(shift =>
             stations.map(station => (
-              <tr key={`${shift}-${station.id}`}>
-                <td className="border p-2 bg-gray-50 whitespace-nowrap">
+              <tr key={`${shift}-${station.id}`} className="odd:bg-white even:bg-slate-50/40">
+                <td className="td-cell sticky start-0 z-10 bg-slate-50 font-semibold whitespace-nowrap text-slate-700">
                   {shiftLabel(lang, shift)} · {station.name}
                 </td>
                 {dates.map(date => {
@@ -66,22 +66,22 @@ export default function ScheduleTable({
                   const hasContent = a && (a.technicianId !== null || a.experimenter || a.note);
                   const cellColorClass = colorClass(a?.color);
                   const empty = !hasContent && !cellColorClass;
-                  const bgClass = cellColorClass || (empty ? 'bg-red-50' : mine ? 'bg-blue-100' : '');
+                  const bgClass = cellColorClass || (empty ? 'bg-rose-50/60' : mine ? 'bg-brand-50' : '');
                   return (
                     <td
                       key={date}
-                      className={`border p-2 text-center ${bgClass} ${mine ? 'font-bold' : ''}`}
+                      className={`td-cell text-center ${bgClass} ${mine ? 'font-bold text-brand-800 ring-1 ring-inset ring-brand-200' : ''}`}
                     >
                       {hasContent && a && (
                         <>
                           {a.technicianId !== null && <div>{nameOf(a.technicianId)}</div>}
                           {a.experimenter && (
-                            <div className="text-xs text-gray-500 font-normal">
+                            <div className="text-xs font-normal text-slate-500">
                               {t('experimenterLabel')}: {a.experimenter}
                             </div>
                           )}
                           {a.note && (
-                            <div className="text-xs text-gray-500 font-normal">
+                            <div className="text-xs font-normal text-slate-500">
                               {t('noteLabel')}: {a.note}
                             </div>
                           )}

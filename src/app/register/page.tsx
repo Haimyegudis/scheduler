@@ -18,8 +18,8 @@ export default function RegisterPage() {
       ]}
       footer={
         <>
-          <p className="mb-1 text-xs text-gray-400">{t('registerRestrictedNote')}</p>
-          {t('alreadyRegistered')} <Link href="/login" className="text-blue-600 hover:underline">{t('toLogin')}</Link>
+          <p className="mb-1 text-xs text-slate-400">{t('registerRestrictedNote')}</p>
+          {t('alreadyRegistered')} <Link href="/login" className="link-brand">{t('toLogin')}</Link>
         </>
       }
     />

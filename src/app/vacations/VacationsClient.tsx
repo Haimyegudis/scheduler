@@ -71,38 +71,44 @@ export default function VacationsClient({ name }: { name: string }) {
   return (
     <div>
       <NavBar name={name} links={TECH_LINKS} />
-      <main className="max-w-2xl mx-auto p-4">
-        <h2 className="font-bold text-lg mb-3">
+      <main className="mx-auto max-w-2xl p-4 sm:p-6">
+        <h2 className="mb-4 text-lg font-bold text-slate-900">
           {t('myVacationsNav')}
-          {data ? ` — ${data.year}` : ''}
+          {data ? <span className="ms-1 font-normal text-slate-400">— {data.year}</span> : ''}
         </h2>
-        {error && <p role="alert" className="text-red-600 text-sm mb-2">{error}</p>}
+        {error && (
+          <p role="alert" className="mb-4 rounded-xl border border-rose-100 bg-rose-50 p-3 text-sm text-rose-700">
+            {error}
+          </p>
+        )}
         {loading ? (
           <Loading />
         ) : !data ? null : (
-          <div className="space-y-4">
+          <div className="animate-fade-up space-y-6">
             <div className="flex flex-wrap gap-2 text-sm">
               {chips.map(c => (
                 <span
                   key={c.key}
-                  className={`border rounded-full px-3 py-1 ${
-                    c.key === 'total' ? 'bg-blue-600 text-white border-blue-600 font-bold' : 'bg-white'
-                  }`}
+                  className={
+                    c.key === 'total'
+                      ? 'badge border border-brand-700 bg-linear-to-br from-brand-600 to-brand-700 text-white shadow-sm'
+                      : 'pill'
+                  }
                 >
                   {t(c.labelKey)}: {data.summary[c.key]}
                 </span>
               ))}
             </div>
             <div>
-              <h3 className="font-bold mb-2">{t('absenceDetailsHeading')}</h3>
+              <h3 className="mb-2 font-bold text-slate-800">{t('absenceDetailsHeading')}</h3>
               {data.absences.length === 0 ? (
-                <p className="text-gray-500 text-sm">{t('noAbsencesThisYear')}</p>
+                <p className="text-sm text-slate-500">{t('noAbsencesThisYear')}</p>
               ) : (
-                <ul className="bg-white rounded-lg shadow-sm divide-y text-sm">
+                <ul className="surface-card divide-y divide-slate-100 text-sm">
                   {data.absences.map(a => (
-                    <li key={a.id} className="px-3 py-2 flex flex-wrap gap-2">
-                      <span className="font-semibold">{absenceLabel(lang, a.type)}</span>
-                      <span className="text-gray-500">
+                    <li key={a.id} className="flex flex-wrap items-center gap-2 px-4 py-3">
+                      <span className="font-semibold text-slate-800">{absenceLabel(lang, a.type)}</span>
+                      <span className="text-slate-500">
                         {formatDate(a.startDate)} – {formatDate(a.endDate)}
                       </span>
                     </li>

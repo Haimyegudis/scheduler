@@ -90,29 +90,35 @@ export default function ConstraintsClient({ name }: { name: string }) {
   return (
     <div>
       <NavBar name={name} links={TECH_LINKS} />
-      <main className="max-w-2xl mx-auto p-4">
+      <main className="mx-auto max-w-2xl p-4 sm:p-6">
         <WeekNav weekStart={weekStart} onChange={setWeekStart} />
         {published && (
-          <p className="bg-yellow-100 text-yellow-800 rounded p-3 mb-4 text-sm">
+          <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
             {t('weekPublishedNotice')}
           </p>
         )}
-        {error && <p className="text-red-600 text-sm mb-2">{error}</p>}
+        {error && (
+          <p className="mb-4 rounded-xl border border-rose-100 bg-rose-50 p-3 text-sm text-rose-700">{error}</p>
+        )}
         {loading ? (
           <Loading />
         ) : (
-          <div className="space-y-3">
+          <div className="animate-fade-up space-y-3">
             {dates.map(date => (
-              <div key={date} className="bg-white rounded-lg shadow-sm p-3 flex flex-wrap items-center gap-2">
-                <span className="font-semibold w-24">
-                  {dayName(date, lang)} <span className="text-gray-400 text-sm">{formatDate(date)}</span>
+              <div
+                key={date}
+                className="surface-card flex flex-wrap items-center gap-3 p-4 transition hover:border-brand-200"
+              >
+                <span className="w-24 font-semibold text-slate-800">
+                  {dayName(date, lang)}
+                  <span className="block text-xs font-normal text-slate-400">{formatDate(date)}</span>
                 </span>
                 {absences[date] ? (
-                  <span className="px-3 py-1.5 rounded-full text-sm bg-purple-100 text-purple-800">
+                  <span className="badge border border-purple-200 bg-purple-100 text-purple-800">
                     {absenceLabel(lang, absences[date])} {t('enteredByAdmin')}
                   </span>
                 ) : (
-                  <div className="flex gap-2 flex-wrap">
+                  <div className="flex flex-wrap gap-2">
                     {BUTTONS.map(opt => {
                       const active = stateFromValue(constraints[date])[opt];
                       return (
@@ -121,11 +127,11 @@ export default function ConstraintsClient({ name }: { name: string }) {
                           disabled={published}
                           aria-pressed={active}
                           onClick={() => toggleDay(date, opt)}
-                          className={`px-3 py-1.5 rounded-full text-sm border transition ${
+                          className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 ${
                             active
-                              ? 'bg-blue-600 text-white border-blue-600'
-                              : 'bg-white hover:bg-gray-100'
-                          } ${published ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              ? 'border-brand-700 bg-linear-to-br from-brand-600 to-brand-700 text-white shadow-sm'
+                              : 'border-slate-200 bg-white text-slate-600 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700'
+                          } ${published ? 'cursor-not-allowed opacity-50' : ''}`}
                         >
                           {constraintLabel(lang, opt)}
                         </button>
@@ -135,7 +141,7 @@ export default function ConstraintsClient({ name }: { name: string }) {
                 )}
               </div>
             ))}
-            <p className="text-xs text-gray-400">{t('autoSavedNote')}</p>
+            <p className="px-1 text-xs text-slate-400">{t('autoSavedNote')}</p>
           </div>
         )}
       </main>
