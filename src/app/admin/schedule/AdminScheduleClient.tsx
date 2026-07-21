@@ -33,24 +33,31 @@ export default function AdminScheduleClient() {
   const load = useCallback(async (ws: string) => {
     setLoading(true);
     setMessage('');
-    const [schedRes, overviewRes] = await Promise.all([
-      fetch(`/api/schedule?weekStart=${ws}`),
-      fetch(`/api/admin/overview?weekStart=${ws}`),
-    ]);
-    if (schedRes.ok && overviewRes.ok) {
-      const sched = await schedRes.json();
-      const overview = await overviewRes.json();
-      setTechnicians(sched.technicians);
-      setConstraints(overview.constraints);
-      setIncludeFriday(sched.schedule?.includeFriday ?? overview.includeFriday ?? false);
-      setStatus(sched.schedule?.status ?? null);
-      const next: Record<CellKey, number | ''> = {};
-      for (const a of sched.schedule?.assignments ?? []) {
-        next[key(a.date, a.shift, a.station)] = a.technicianId;
+    try {
+      const [schedRes, overviewRes] = await Promise.all([
+        fetch(`/api/schedule?weekStart=${ws}`),
+        fetch(`/api/admin/overview?weekStart=${ws}`),
+      ]);
+      if (schedRes.ok && overviewRes.ok) {
+        const sched = await schedRes.json();
+        const overview = await overviewRes.json();
+        setTechnicians(sched.technicians);
+        setConstraints(overview.constraints);
+        setIncludeFriday(sched.schedule?.includeFriday ?? overview.includeFriday ?? false);
+        setStatus(sched.schedule?.status ?? null);
+        const next: Record<CellKey, number | ''> = {};
+        for (const a of sched.schedule?.assignments ?? []) {
+          next[key(a.date, a.shift, a.station)] = a.technicianId;
+        }
+        setCells(next);
+      } else {
+        setMessage('שגיאה בטעינת נתונים');
       }
-      setCells(next);
+    } catch {
+      setMessage('שגיאת תקשורת — נסה לרענן את הדף');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -87,52 +94,75 @@ export default function AdminScheduleClient() {
   }
 
   async function saveDraft(overrideFriday?: boolean): Promise<boolean> {
-    const res = await fetch('/api/admin/schedule', {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        weekStart,
-        includeFriday: overrideFriday ?? includeFriday,
-        assignments: assignmentsPayload,
-      }),
-    });
-    setMessage(res.ok ? 'הטיוטה נשמרה' : 'השמירה נכשלה');
-    if (res.ok && status === null) setStatus('draft');
-    return res.ok;
+    try {
+      const res = await fetch('/api/admin/schedule', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          weekStart,
+          includeFriday: overrideFriday ?? includeFriday,
+          assignments: assignmentsPayload,
+        }),
+      });
+      if (res.ok) {
+        setMessage('הטיוטה נשמרה');
+        if (status === null) setStatus('draft');
+        return true;
+      }
+      const data = await res.json().catch(() => ({}));
+      setMessage(data.error ?? 'השמירה נכשלה');
+      return false;
+    } catch {
+      setMessage('שגיאת תקשורת — השמירה נכשלה');
+      return false;
+    }
   }
 
   async function toggleFriday(value: boolean) {
     setIncludeFriday(value);
-    await saveDraft(value);
+    const ok = await saveDraft(value);
+    if (ok) {
+      await load(weekStart);
+    } else {
+      setIncludeFriday(!value);
+    }
   }
 
   async function generate() {
-    if (Object.keys(cells).length > 0 && !confirm('יצירת תוכנית תדרוס את השיבוץ הקיים. להמשיך?')) return;
-    const res = await fetch('/api/admin/schedule/generate', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ weekStart, includeFriday }),
-    });
-    if (res.ok) {
-      setMessage('נוצרה תוכנית חדשה');
-      await load(weekStart);
-    } else {
-      setMessage('יצירת התוכנית נכשלה');
+    try {
+      if (Object.keys(cells).length > 0 && !confirm('יצירת תוכנית תדרוס את השיבוץ הקיים. להמשיך?')) return;
+      const res = await fetch('/api/admin/schedule/generate', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ weekStart, includeFriday }),
+      });
+      if (res.ok) {
+        setMessage('נוצרה תוכנית חדשה');
+        await load(weekStart);
+      } else {
+        setMessage('יצירת התוכנית נכשלה');
+      }
+    } catch {
+      setMessage('שגיאת תקשורת — יצירת התוכנית נכשלה');
     }
   }
 
   async function publish() {
-    if (!(await saveDraft())) return;
-    const res = await fetch('/api/admin/schedule/publish', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ weekStart }),
-    });
-    if (res.ok) {
-      setStatus('published');
-      setMessage('התוכנית פורסמה! הטכנאים יכולים לצפות בה.');
-    } else {
-      setMessage('הפרסום נכשל');
+    try {
+      if (!(await saveDraft())) return;
+      const res = await fetch('/api/admin/schedule/publish', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ weekStart }),
+      });
+      if (res.ok) {
+        setStatus('published');
+        setMessage('התוכנית פורסמה! הטכנאים יכולים לצפות בה.');
+      } else {
+        setMessage('הפרסום נכשל');
+      }
+    } catch {
+      setMessage('שגיאת תקשורת — הפרסום נכשל');
     }
   }
 
