@@ -32,3 +32,17 @@ test('getSession reads the cookie header from a Request', async () => {
   expect((await getSession(req))?.userId).toBe(3);
   expect(await getSession(new Request('http://test/'))).toBeNull();
 });
+
+test('createSessionToken throws when JWT_SECRET is missing', async () => {
+  const saved = process.env.JWT_SECRET;
+  delete process.env.JWT_SECRET;
+  try {
+    await expect(createSessionToken({ role: 'admin', name: 'x' })).rejects.toThrow('JWT_SECRET');
+  } finally {
+    process.env.JWT_SECRET = saved;
+  }
+});
+
+test('cookies add Secure flag only in production', () => {
+  expect(sessionCookie('abc')).not.toContain('Secure'); // NODE_ENV=test here
+});

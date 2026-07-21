@@ -8,8 +8,14 @@ export interface Session {
 
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
 
+function secureFlag(): string {
+  return process.env.NODE_ENV === 'production' ? '; Secure' : '';
+}
+
 function secret(): Uint8Array {
-  return new TextEncoder().encode(process.env.JWT_SECRET ?? '');
+  const value = process.env.JWT_SECRET;
+  if (!value) throw new Error('JWT_SECRET environment variable is not set');
+  return new TextEncoder().encode(value);
 }
 
 export async function createSessionToken(session: Session): Promise<string> {
@@ -33,11 +39,11 @@ export async function verifySessionToken(token: string): Promise<Session | null>
 }
 
 export function sessionCookie(token: string): string {
-  return `session=${token}; HttpOnly; Path=/; Max-Age=${COOKIE_MAX_AGE}; SameSite=Lax`;
+  return `session=${token}; HttpOnly; Path=/; Max-Age=${COOKIE_MAX_AGE}; SameSite=Lax${secureFlag()}`;
 }
 
 export function clearSessionCookie(): string {
-  return 'session=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax';
+  return `session=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax${secureFlag()}`;
 }
 
 export async function getSession(req: Request): Promise<Session | null> {
