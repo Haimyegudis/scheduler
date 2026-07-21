@@ -4116,6 +4116,20 @@ Steps: TDD where logic changes (scheduler, routes); full suite + build green; co
 
 ---
 
+### Task 22: PWA + Web Push notifications on publish
+
+- **PWA:** `public/manifest.json` (name, icons from logo.png, standalone display, theme color HP cyan), linked in layout metadata; minimal `public/sw.js` service worker handling `push` (show notification: title/body from payload, icon logo, click opens site root) and `notificationclick`. Register the SW from a small client component in the layout.
+- **Schema:** `model PushSubscription { id, technicianId (FK cascade), endpoint String @unique, p256dh String, auth String, createdAt }` — include in both neon SQL files.
+- **Server:** `web-push` npm package. Env: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (mailto:). `src/lib/push.ts`: `sendPushToAll(payload)` — loads all subscriptions, sends, deletes subscriptions that return 404/410; never throws (log and continue).
+- **API:** `GET /api/push/public-key` (any logged-in) → `{ key }`; `POST /api/push/subscribe` (logged-in) stores/upserts the browser subscription for the session user; `DELETE /api/push/subscribe` removes by endpoint.
+- **Publish hook:** `POST /api/admin/schedule/publish` calls `sendPushToAll` (fire-and-forget with await but errors swallowed) with a bilingual-safe payload (Hebrew+English line: "פורסמה תוכנית משמרות חדשה / New shift schedule published").
+- **Client UX:** a small "Enable notifications" bell button in NavBar (visible when Notification.permission !== 'granted' and push supported); requests permission, subscribes with the public key, POSTs subscription; hidden once granted+subscribed. i18n strings both languages.
+- **Tests:** subscribe/unsubscribe route TDD (auth, upsert by endpoint); publish route test asserting it still publishes when push sending fails (no subscriptions / bad keys). Don't test real push delivery.
+- Missing VAPID env vars: push endpoints return 503-with-Hebrew-error, publish continues fine; document keys generation in README (`npx web-push generate-vapid-keys`) and Vercel env setup.
+- Suite + build green; commit.
+
+---
+
 ### Task 20: Modern UI redesign (frontend-design)
 
 - Invoke the frontend-design skill FIRST and follow it.
