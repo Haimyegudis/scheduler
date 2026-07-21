@@ -95,3 +95,10 @@ test('logout clears the cookie', async () => {
   const res = await logout();
   expect(res.headers.get('set-cookie')).toContain('Max-Age=0');
 });
+
+test('register and login handle non-string field types with clean errors', async () => {
+  await prisma.allowedEmail.create({ data: { email: 'a@b.com' } });
+  expect((await register(jsonReq('/x', { name: 5, email: 'a@b.com', password: 'password1' }))).status).toBe(400);
+  expect((await register(jsonReq('/x', { name: 'a', email: 123, password: ['x'] }))).status).toBe(400);
+  expect((await login(jsonReq('/x', { email: { a: 1 }, password: 'password1' }))).status).toBe(401);
+});
