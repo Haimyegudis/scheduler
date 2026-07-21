@@ -4102,6 +4102,7 @@ Steps: TDD where logic changes (scheduler, routes); full suite + build green; co
 - Default language becomes **English**: layout `getLang` fallback 'en'; everything else already works. RTL only when cookie says 'he'.
 - Published/technician ScheduleTable + admin board: empty cell (no technician, no experimenter) renders empty with light red background — no "ריק"/"—" text (board's select keeps an empty option for clearing but styled as blank).
 - Board dropdown availability indication: each selectable technician's option text shows their request for that day — "Name · בוקר/ערב/בוקר+ערב" (i18n: Morning/Evening/Both); unfilled shows "Name · ?"; options ordered: exact-shift match first, then flex (both), then unfilled/mismatch. Off/absent remain excluded (hard block, unchanged).
+- **Delete users:** `DELETE /api/admin/users` `{userId}` — admin only; 400 when `userId === session.userId` (cannot delete self); 404 unknown; deletes the user (relations cascade: constraints, absences, assignments). Users page gets a delete button per row (hidden/disabled on own row) with a confirm dialog warning that the user's history is removed too. i18n strings in both dictionaries. TDD the route.
 - Update tests if any assert Hebrew default; full suite + build green; commit.
 
 ---
