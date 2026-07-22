@@ -4,8 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import NavBar from '@/components/NavBar';
 import Loading from '@/components/Loading';
 import { formatDate } from '@/lib/dates';
-import { absenceLabel } from '@/lib/labels';
-import { useT } from '@/lib/i18n';
+import { absenceLabel, absenceEntries } from '@/lib/labels';
+import { useT, translateApiError } from '@/lib/i18n';
 
 interface Summary {
   vacation: number;
@@ -37,6 +37,9 @@ export default function VacationsClient({ name }: { name: string }) {
   const [data, setData] = useState<VacationsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [form, setForm] = useState({ type: 'vacation', startDate: '', endDate: '' });
+  const [formError, setFormError] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -58,6 +61,48 @@ export default function VacationsClient({ name }: { name: string }) {
   useEffect(() => {
     load();
   }, [load]);
+
+  async function addAbsence(e: React.FormEvent) {
+    e.preventDefault();
+    setFormError('');
+    setSaving(true);
+    try {
+      const res = await fetch('/api/my-absences', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      if (res.ok) {
+        setForm(f => ({ ...f, startDate: '', endDate: '' }));
+        await load();
+      } else {
+        const d = await res.json().catch(() => ({}));
+        setFormError(d.error ? translateApiError(lang, d.error) : t('addMyAbsenceFailed'));
+      }
+    } catch {
+      setFormError(t('networkError'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removeAbsence(id: number) {
+    setFormError('');
+    try {
+      const res = await fetch('/api/my-absences', {
+        method: 'DELETE',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setFormError(d.error ? translateApiError(lang, d.error) : t('deleteFailed'));
+      }
+    } catch {
+      setFormError(t('networkError'));
+    }
+    await load();
+  }
 
   const chips: Array<{ key: keyof Summary; labelKey: 'vacationCol' | 'sickCol' | 'miluimCol' | 'otherCol' | 'offMarkedCol' | 'totalAbsenceCol' }> = [
     { key: 'vacation', labelKey: 'vacationCol' },
@@ -111,10 +156,55 @@ export default function VacationsClient({ name }: { name: string }) {
                       <span className="text-slate-500">
                         {formatDate(a.startDate)} – {formatDate(a.endDate)}
                       </span>
+                      <button onClick={() => removeAbsence(a.id)} className="link-danger ms-auto">
+                        {t('deleteBtn')}
+                      </button>
                     </li>
                   ))}
                 </ul>
               )}
+            </div>
+            <div>
+              <h3 className="mb-2 font-bold text-slate-800">{t('addAbsenceHeading')}</h3>
+              <p className="mb-3 text-sm text-slate-500">{t('myAbsenceHint')}</p>
+              <form onSubmit={addAbsence} className="surface-card flex flex-wrap items-end gap-3 p-4">
+                <label className="block text-sm text-slate-600">
+                  {t('typeLabel')}
+                  <select
+                    value={form.type}
+                    onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
+                    className="field-sm mt-1 block"
+                  >
+                    {absenceEntries(lang).map(([value, label]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-sm text-slate-600">
+                  {t('fromDateLabel')}
+                  <input
+                    type="date"
+                    required
+                    value={form.startDate}
+                    onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))}
+                    className="field-sm mt-1 block"
+                  />
+                </label>
+                <label className="block text-sm text-slate-600">
+                  {t('toDateInclusiveLabel')}
+                  <input
+                    type="date"
+                    required
+                    value={form.endDate}
+                    onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))}
+                    className="field-sm mt-1 block"
+                  />
+                </label>
+                <button type="submit" disabled={saving} className="btn-primary">
+                  {t('addBtn')}
+                </button>
+              </form>
+              {formError && <p className="mt-2 text-sm text-rose-600">{formError}</p>}
             </div>
           </div>
         )}
