@@ -8,8 +8,8 @@ import ColorPopover from '@/components/ColorPopover';
 import { getCurrentWeekStart, weekDates, dayName, formatDate } from '@/lib/dates';
 import { shiftLabel, constraintLabel, absenceLabel } from '@/lib/labels';
 import { useT, translateApiError, type DictKey } from '@/lib/i18n';
-import { colorClass, type ColorToken } from '@/lib/cellColors';
-import { buildScheduleHtmlTable, buildScheduleText } from '@/lib/exportSchedule';
+import { colorClass, pressLabelClass, pressRowClass, pressLabelHex, type ColorToken } from '@/lib/cellColors';
+import { buildScheduleHtmlTable, buildScheduleText, type ScheduleExportGroup } from '@/lib/exportSchedule';
 
 const ADMIN_LINKS_KEYS = [
   { href: '/admin', key: 'dashboardNav' },
@@ -239,9 +239,11 @@ export default function AdminScheduleClient() {
   async function copySchedule() {
     try {
       const days = dates.map(d => ({ date: d, label: `${dayName(d, lang)} ${formatDate(d)}` }));
-      const rows = SHIFTS.flatMap(shift =>
-        boardStations.map(station => ({
-          label: `${shiftLabel(lang, shift)} · ${station.name}`,
+      const groups: ScheduleExportGroup[] = boardStations.map((station, si) => ({
+        pressLabel: station.name,
+        pressColorHex: pressLabelHex(si),
+        shifts: SHIFTS.map(shift => ({
+          shiftLabel: shiftLabel(lang, shift),
           cells: Object.fromEntries(
             dates.map(date => {
               const v = cells[key(date, shift, station.id)] ?? emptyCell;
@@ -252,10 +254,10 @@ export default function AdminScheduleClient() {
               ];
             })
           ),
-        }))
-      );
-      const html = buildScheduleHtmlTable(t('shiftStationHeader'), days, rows);
-      const text = buildScheduleText(t('shiftStationHeader'), days, rows);
+        })),
+      }));
+      const html = buildScheduleHtmlTable(t('shiftStationHeader'), days, groups);
+      const text = buildScheduleText(t('shiftStationHeader'), days, groups);
       const item = new ClipboardItem({
         'text/html': new Blob([html], { type: 'text/html' }),
         'text/plain': new Blob([text], { type: 'text/plain' }),
@@ -514,7 +516,9 @@ export default function AdminScheduleClient() {
                 <table className="table-shell">
                   <thead>
                     <tr>
-                      <th className="th-cell sticky start-0 z-20 text-start">{t('shiftStationHeader')}</th>
+                      <th className="th-cell sticky start-0 z-20 w-52 text-start" colSpan={2}>
+                        {t('shiftStationHeader')}
+                      </th>
                       {dates.map(d => (
                         <th key={d} className="th-cell text-center">
                           {dayName(d, lang)}
@@ -524,15 +528,25 @@ export default function AdminScheduleClient() {
                     </tr>
                   </thead>
                   <tbody>
-                    {SHIFTS.map(shift =>
-                      boardStations.map(station => (
-                        <tr key={`${shift}-${station.id}`}>
+                    {boardStations.flatMap((station, si) =>
+                      SHIFTS.map((shift, shi) => (
+                        <tr key={`${station.id}-${shift}`}>
+                          {shi === 0 && (
+                            <td
+                              rowSpan={2}
+                              className={`td-cell sticky start-0 z-10 w-28 align-top whitespace-nowrap font-semibold ${pressLabelClass(
+                                si
+                              )} ${station.active ? 'text-slate-700' : 'text-slate-400'}`}
+                            >
+                              {station.name}
+                            </td>
+                          )}
                           <td
-                            className={`td-cell sticky start-0 z-10 bg-slate-50 whitespace-nowrap font-semibold ${
-                              station.active ? 'text-slate-700' : 'text-slate-400'
+                            className={`td-cell sticky start-28 z-10 w-24 whitespace-nowrap font-semibold ${pressRowClass(si)} ${
+                              station.active ? 'text-slate-600' : 'text-slate-400'
                             }`}
                           >
-                            {shiftLabel(lang, shift)} · {station.name}
+                            {shiftLabel(lang, shift)}
                           </td>
                           {dates.map(date => {
                             const k = key(date, shift, station.id);
@@ -540,7 +554,7 @@ export default function AdminScheduleClient() {
                             const warning = warningsFor(date, shift, v.technicianId);
                             const hasContent = v.technicianId !== '' || v.experimenter.trim() !== '' || v.note.trim() !== '';
                             const cellColorClass = colorClass(v.color);
-                            const bgClass = cellColorClass || (!hasContent ? 'bg-rose-50/60' : '');
+                            const bgClass = cellColorClass || (!hasContent ? 'bg-rose-50/60' : pressRowClass(si));
                             return (
                               <td key={date} className={`relative border-b border-slate-100 p-1.5 align-top ${bgClass}`}>
                                 <div className="flex justify-end">
