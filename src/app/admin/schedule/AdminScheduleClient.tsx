@@ -5,11 +5,12 @@ import NavBar from '@/components/NavBar';
 import WeekNav from '@/components/WeekNav';
 import Loading from '@/components/Loading';
 import ColorPopover from '@/components/ColorPopover';
+import ScheduleTable from '@/components/ScheduleTable';
 import { getCurrentWeekStart, weekDates, dayName, formatDate } from '@/lib/dates';
 import { shiftLabel, constraintLabel, absenceLabel } from '@/lib/labels';
 import { useT, translateApiError, type DictKey } from '@/lib/i18n';
-import { colorClass, type ColorToken } from '@/lib/cellColors';
-import { buildScheduleHtmlTable, buildScheduleText } from '@/lib/exportSchedule';
+import { colorClass, pressLabelClass, pressRowClass, pressLabelHex, type ColorToken } from '@/lib/cellColors';
+import { buildScheduleHtmlTable, buildScheduleText, type ScheduleExportGroup } from '@/lib/exportSchedule';
 
 const ADMIN_LINKS_KEYS = [
   { href: '/admin', key: 'dashboardNav' },
@@ -54,6 +55,7 @@ export default function AdminScheduleClient() {
   const [absences, setAbsences] = useState<Record<string, Record<string, string>>>({});
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [editing, setEditing] = useState(false);
   const [stationsOpen, setStationsOpen] = useState(false);
   const [newStationName, setNewStationName] = useState('');
   const [stationDrafts, setStationDrafts] = useState<Record<number, string>>({});
@@ -80,6 +82,7 @@ export default function AdminScheduleClient() {
   const load = useCallback(async (ws: string) => {
     setLoading(true);
     setMessage('');
+    setEditing(false);
     try {
       const [schedRes, overviewRes] = await Promise.all([
         fetch(`/api/schedule?weekStart=${ws}`),
@@ -239,9 +242,11 @@ export default function AdminScheduleClient() {
   async function copySchedule() {
     try {
       const days = dates.map(d => ({ date: d, label: `${dayName(d, lang)} ${formatDate(d)}` }));
-      const rows = SHIFTS.flatMap(shift =>
-        boardStations.map(station => ({
-          label: `${shiftLabel(lang, shift)} · ${station.name}`,
+      const groups: ScheduleExportGroup[] = boardStations.map((station, si) => ({
+        pressLabel: station.name,
+        pressColorHex: pressLabelHex(si),
+        shifts: SHIFTS.map(shift => ({
+          shiftLabel: shiftLabel(lang, shift),
           cells: Object.fromEntries(
             dates.map(date => {
               const v = cells[key(date, shift, station.id)] ?? emptyCell;
@@ -252,10 +257,10 @@ export default function AdminScheduleClient() {
               ];
             })
           ),
-        }))
-      );
-      const html = buildScheduleHtmlTable(t('shiftStationHeader'), days, rows);
-      const text = buildScheduleText(t('shiftStationHeader'), days, rows);
+        })),
+      }));
+      const html = buildScheduleHtmlTable(t('shiftStationHeader'), days, groups);
+      const text = buildScheduleText(t('shiftStationHeader'), days, groups);
       const item = new ClipboardItem({
         'text/html': new Blob([html], { type: 'text/html' }),
         'text/plain': new Blob([text], { type: 'text/plain' }),
@@ -331,6 +336,7 @@ export default function AdminScheduleClient() {
       });
       if (res.ok) {
         setStatus('published');
+        setEditing(false);
         setMessage(t('schedulePublishedMsg'));
       } else {
         setMessage(t('publishFailed'));
@@ -403,69 +409,95 @@ export default function AdminScheduleClient() {
     }
   }
 
+  // Published schedules render a clean read-only board by default; "Edit schedule" flips
+  // into the full editing grid without touching the schedule's status on the server.
+  const cleanView = status === 'published' && !editing;
+
   return (
     <div>
       <NavBar name={t('adminName')} links={ADMIN_LINKS} />
       <main className="mx-auto max-w-6xl p-4 sm:p-6">
         <WeekNav weekStart={weekStart} onChange={setWeekStart} />
 
-        <div className="surface-card mb-4 overflow-hidden">
-          <button
-            onClick={() => setStationsOpen(o => !o)}
-            className="flex w-full items-center justify-between px-4 py-3 text-start font-bold text-slate-800 transition hover:bg-slate-50"
-            aria-expanded={stationsOpen}
-          >
-            <span>{t('stationsHeading')}</span>
-            <span
-              className={`text-slate-400 transition-transform duration-200 ${stationsOpen ? 'rotate-180' : ''}`}
-              aria-hidden
+        {!cleanView && (
+          <div className="surface-card mb-4 overflow-hidden">
+            <button
+              onClick={() => setStationsOpen(o => !o)}
+              className="flex w-full items-center justify-between px-4 py-3 text-start font-bold text-slate-800 transition hover:bg-slate-50"
+              aria-expanded={stationsOpen}
             >
-              ▾
-            </span>
-          </button>
-          {stationsOpen && (
-            <div className="border-t border-slate-100 px-4 pt-3 pb-4">
-              {stationsMessage && <p className="mb-2 text-sm text-rose-600">{stationsMessage}</p>}
-              {stations.length === 0 && <p className="mb-2 text-sm text-slate-500">{t('noStationsHint')}</p>}
-              <ul className="mb-3 divide-y divide-slate-100">
-                {stations
-                  .slice()
-                  .sort((a, b) => a.position - b.position)
-                  .map(s => (
-                    <li key={s.id} className="flex items-center gap-2 py-2">
-                      <input
-                        value={stationDrafts[s.id] ?? s.name}
-                        onChange={e => setStationDrafts(d => ({ ...d, [s.id]: e.target.value }))}
-                        onBlur={() => renameStation(s.id)}
-                        className={`field-sm flex-1 ${s.active ? '' : 'text-slate-400'}`}
-                      />
-                      <button
-                        onClick={() => toggleStationActive(s.id, !s.active)}
-                        className="btn-secondary btn-sm whitespace-nowrap"
-                      >
-                        {s.active ? t('deactivateBtn') : t('activateBtn')}
-                      </button>
-                    </li>
-                  ))}
-              </ul>
-              <div className="flex gap-2">
-                <input
-                  value={newStationName}
-                  onChange={e => setNewStationName(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && addStation()}
-                  placeholder={t('stationNamePlaceholder')}
-                  className="field-sm flex-1"
-                />
-                <button onClick={addStation} className="btn-primary btn-sm">
-                  {t('addBtn')}
-                </button>
+              <span>{t('stationsHeading')}</span>
+              <span
+                className={`text-slate-400 transition-transform duration-200 ${stationsOpen ? 'rotate-180' : ''}`}
+                aria-hidden
+              >
+                ▾
+              </span>
+            </button>
+            {stationsOpen && (
+              <div className="border-t border-slate-100 px-4 pt-3 pb-4">
+                {stationsMessage && <p className="mb-2 text-sm text-rose-600">{stationsMessage}</p>}
+                {stations.length === 0 && <p className="mb-2 text-sm text-slate-500">{t('noStationsHint')}</p>}
+                <ul className="mb-3 divide-y divide-slate-100">
+                  {stations
+                    .slice()
+                    .sort((a, b) => a.position - b.position)
+                    .map(s => (
+                      <li key={s.id} className="flex items-center gap-2 py-2">
+                        <input
+                          value={stationDrafts[s.id] ?? s.name}
+                          onChange={e => setStationDrafts(d => ({ ...d, [s.id]: e.target.value }))}
+                          onBlur={() => renameStation(s.id)}
+                          className={`field-sm flex-1 ${s.active ? '' : 'text-slate-400'}`}
+                        />
+                        <button
+                          onClick={() => toggleStationActive(s.id, !s.active)}
+                          className="btn-secondary btn-sm whitespace-nowrap"
+                        >
+                          {s.active ? t('deactivateBtn') : t('activateBtn')}
+                        </button>
+                      </li>
+                    ))}
+                </ul>
+                <div className="flex gap-2">
+                  <input
+                    value={newStationName}
+                    onChange={e => setNewStationName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && addStation()}
+                    placeholder={t('stationNamePlaceholder')}
+                    className="field-sm flex-1"
+                  />
+                  <button onClick={addStation} className="btn-primary btn-sm">
+                    {t('addBtn')}
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
         {loading ? (
           <Loading />
+        ) : cleanView ? (
+          <div className="animate-fade-up">
+            <div className="mb-4 flex flex-wrap items-center gap-2.5">
+              <span className="badge bg-emerald-100 text-emerald-800">
+                {t('statusPrefix')} {t('statusPublished')}
+              </span>
+              <button onClick={copySchedule} className="btn-secondary">
+                {t('copyScheduleBtn')}
+              </button>
+              <button onClick={() => setEditing(true)} className="btn-primary ms-auto">
+                {t('editScheduleBtn')}
+              </button>
+            </div>
+            {message && (
+              <p className="mb-3 rounded-xl border border-brand-100 bg-brand-50 px-3 py-2 text-sm text-brand-800">
+                {message}
+              </p>
+            )}
+            <ScheduleTable dates={dates} assignments={assignmentsPayload} technicians={technicians} stations={boardStations} />
+          </div>
         ) : (
           <div className="animate-fade-up">
             <div className="mb-4 flex flex-wrap items-center gap-2.5">
@@ -514,7 +546,9 @@ export default function AdminScheduleClient() {
                 <table className="table-shell">
                   <thead>
                     <tr>
-                      <th className="th-cell sticky start-0 z-20 text-start">{t('shiftStationHeader')}</th>
+                      <th className="th-cell sticky start-0 z-20 w-52 text-start" colSpan={2}>
+                        {t('shiftStationHeader')}
+                      </th>
                       {dates.map(d => (
                         <th key={d} className="th-cell text-center">
                           {dayName(d, lang)}
@@ -524,15 +558,25 @@ export default function AdminScheduleClient() {
                     </tr>
                   </thead>
                   <tbody>
-                    {SHIFTS.map(shift =>
-                      boardStations.map(station => (
-                        <tr key={`${shift}-${station.id}`}>
+                    {boardStations.flatMap((station, si) =>
+                      SHIFTS.map((shift, shi) => (
+                        <tr key={`${station.id}-${shift}`}>
+                          {shi === 0 && (
+                            <td
+                              rowSpan={2}
+                              className={`td-cell sticky start-0 z-10 w-28 align-top whitespace-nowrap font-semibold ${pressLabelClass(
+                                si
+                              )} ${station.active ? 'text-slate-700' : 'text-slate-400'}`}
+                            >
+                              {station.name}
+                            </td>
+                          )}
                           <td
-                            className={`td-cell sticky start-0 z-10 bg-slate-50 whitespace-nowrap font-semibold ${
-                              station.active ? 'text-slate-700' : 'text-slate-400'
+                            className={`td-cell sticky start-28 z-10 w-24 whitespace-nowrap font-semibold ${pressRowClass(si)} ${
+                              station.active ? 'text-slate-600' : 'text-slate-400'
                             }`}
                           >
-                            {shiftLabel(lang, shift)} · {station.name}
+                            {shiftLabel(lang, shift)}
                           </td>
                           {dates.map(date => {
                             const k = key(date, shift, station.id);
@@ -540,7 +584,7 @@ export default function AdminScheduleClient() {
                             const warning = warningsFor(date, shift, v.technicianId);
                             const hasContent = v.technicianId !== '' || v.experimenter.trim() !== '' || v.note.trim() !== '';
                             const cellColorClass = colorClass(v.color);
-                            const bgClass = cellColorClass || (!hasContent ? 'bg-rose-50/60' : '');
+                            const bgClass = cellColorClass || (!hasContent ? 'bg-rose-50/60' : pressRowClass(si));
                             return (
                               <td key={date} className={`relative border-b border-slate-100 p-1.5 align-top ${bgClass}`}>
                                 <div className="flex justify-end">

@@ -3,7 +3,7 @@
 import { dayName, formatDate } from '@/lib/dates';
 import { shiftLabel } from '@/lib/labels';
 import { useT } from '@/lib/i18n';
-import { colorClass } from '@/lib/cellColors';
+import { colorClass, pressLabelClass, pressRowClass } from '@/lib/cellColors';
 
 export interface AssignmentView {
   date: string;
@@ -38,13 +38,16 @@ export default function ScheduleTable({
   const nameOf = (id: number) => technicians.find(t => t.id === id)?.name ?? '?';
   const cell = (date: string, shift: string, stationId: number) =>
     assignments.find(a => a.date === date && a.shift === shift && a.stationId === stationId);
+  const orderedStations = stations.slice().sort((a, b) => a.position - b.position);
 
   return (
     <div className="surface-card scroll-thin overflow-x-auto">
       <table className="table-shell">
         <thead>
           <tr>
-            <th className="th-cell sticky start-0 z-20 text-start">{t('shiftStationHeader')}</th>
+            <th className="th-cell sticky start-0 z-20 w-52 text-start" colSpan={2}>
+              {t('shiftStationHeader')}
+            </th>
             {dates.map(d => (
               <th key={d} className="th-cell text-center">
                 {dayName(d, lang)}
@@ -54,11 +57,25 @@ export default function ScheduleTable({
           </tr>
         </thead>
         <tbody>
-          {(['morning', 'evening'] as const).map(shift =>
-            stations.map(station => (
-              <tr key={`${shift}-${station.id}`} className="odd:bg-white even:bg-slate-50/40">
-                <td className="td-cell sticky start-0 z-10 bg-slate-50 font-semibold whitespace-nowrap text-slate-700">
-                  {shiftLabel(lang, shift)} · {station.name}
+          {orderedStations.flatMap((station, si) =>
+            (['morning', 'evening'] as const).map((shift, shi) => (
+              <tr key={`${station.id}-${shift}`} className="odd:bg-white even:bg-slate-50/40">
+                {shi === 0 && (
+                  <td
+                    rowSpan={2}
+                    className={`td-cell sticky start-0 z-10 w-28 align-top font-semibold whitespace-nowrap text-slate-700 ${pressLabelClass(
+                      si
+                    )}`}
+                  >
+                    {station.name}
+                  </td>
+                )}
+                <td
+                  className={`td-cell sticky start-28 z-10 w-24 font-semibold whitespace-nowrap text-slate-600 ${pressRowClass(
+                    si
+                  )}`}
+                >
+                  {shiftLabel(lang, shift)}
                 </td>
                 {dates.map(date => {
                   const a = cell(date, shift, station.id);
@@ -66,7 +83,7 @@ export default function ScheduleTable({
                   const hasContent = a && (a.technicianId !== null || a.experimenter || a.note);
                   const cellColorClass = colorClass(a?.color);
                   const empty = !hasContent && !cellColorClass;
-                  const bgClass = cellColorClass || (empty ? 'bg-rose-50/60' : mine ? 'bg-brand-50' : '');
+                  const bgClass = cellColorClass || (empty ? 'bg-rose-50/60' : mine ? 'bg-brand-50' : pressRowClass(si));
                   return (
                     <td
                       key={date}

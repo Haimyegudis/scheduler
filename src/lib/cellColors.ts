@@ -57,3 +57,60 @@ export function colorClass(token: string | null | undefined): string {
 export function colorHex(token: string | null | undefined): string | null {
   return isColorToken(token) ? COLOR_HEX[token] : null;
 }
+
+// Automatic, consistent per-press identifying tint, cycled by station position (0-based).
+// Reuses the same 8 hues as the admin preset palette above, but at much lighter shades
+// (50/100 instead of 200) so admin-applied cell colors always read as visually dominant.
+
+// Press-name row-label cell tint. Paired with the app's existing slate text colors, which
+// keep AA contrast against these very light backgrounds regardless of hue.
+const PRESS_LABEL_CLASSES: Record<ColorToken, string> = {
+  red: 'bg-red-100',
+  orange: 'bg-orange-100',
+  yellow: 'bg-yellow-100',
+  green: 'bg-green-100',
+  teal: 'bg-teal-100',
+  blue: 'bg-blue-100',
+  purple: 'bg-purple-100',
+  pink: 'bg-pink-100',
+};
+
+// Even fainter tint usable as a row/data-cell background fallback.
+const PRESS_ROW_CLASSES: Record<ColorToken, string> = {
+  red: 'bg-red-50',
+  orange: 'bg-orange-50',
+  yellow: 'bg-yellow-50',
+  green: 'bg-green-50',
+  teal: 'bg-teal-50',
+  blue: 'bg-blue-50',
+  purple: 'bg-purple-50',
+  pink: 'bg-pink-50',
+};
+
+// Inline hex for the press-label cell in the Outlook copy export.
+const PRESS_LABEL_HEX: Record<ColorToken, string> = {
+  red: '#fee2e2',
+  orange: '#ffedd5',
+  yellow: '#fef9c3',
+  green: '#dcfce7',
+  teal: '#ccfbf1',
+  blue: '#dbeafe',
+  purple: '#f3e8ff',
+  pink: '#fce7f3',
+};
+
+export function pressHue(position: number): ColorToken {
+  return COLOR_TOKENS[((position % COLOR_TOKENS.length) + COLOR_TOKENS.length) % COLOR_TOKENS.length];
+}
+
+export function pressLabelClass(position: number): string {
+  return PRESS_LABEL_CLASSES[pressHue(position)];
+}
+
+export function pressRowClass(position: number): string {
+  return PRESS_ROW_CLASSES[pressHue(position)];
+}
+
+export function pressLabelHex(position: number): string {
+  return PRESS_LABEL_HEX[pressHue(position)];
+}
