@@ -165,6 +165,7 @@ const he = {
   copyScheduleBtn: 'העתק תוכנית',
   copyScheduleSuccessMsg: 'התוכנית הועתקה — ניתן להדביק ב-Outlook',
   copyScheduleFailedMsg: 'ההעתקה נכשלה',
+  editScheduleBtn: 'עריכת התוכנית',
 
   enableNotificationsBtn: 'הפעל התראות',
   notificationsSetupFailed: 'הפעלת ההתראות נכשלה',
@@ -334,6 +335,7 @@ const en: Record<keyof typeof he, string> = {
   copyScheduleBtn: 'Copy schedule',
   copyScheduleSuccessMsg: 'Schedule copied — you can paste it into Outlook',
   copyScheduleFailedMsg: 'Copy failed',
+  editScheduleBtn: 'Edit schedule',
 
   enableNotificationsBtn: 'Enable notifications',
   notificationsSetupFailed: 'Failed to enable notifications',
