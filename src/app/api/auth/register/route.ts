@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/db';
 import { createSessionToken, sessionCookie } from '@/lib/auth';
 import { ADMIN_EMAIL } from '@/lib/config';
+import { sendPushToAdmins } from '@/lib/push';
 
 export async function POST(req: Request) {
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
@@ -35,5 +36,21 @@ export async function POST(req: Request) {
   }
   const role = tech.isAdmin ? 'admin' : 'technician';
   const token = await createSessionToken({ userId: tech.id, role, name: tech.name });
+
+  // Notify admins that a new user has registered. Best-effort — registration
+  // must succeed regardless of push delivery outcome — and excludes the new
+  // account itself in case it's the bootstrap admin registering for the first time.
+  try {
+    await sendPushToAdmins(
+      {
+        title: 'HP Indigo Scheduler',
+        body: `נרשם משתמש חדש: ${name} / New user registered: ${name}`,
+      },
+      tech.id
+    );
+  } catch {
+    // sendPushToAdmins already swallows its own errors; this is defense-in-depth.
+  }
+
   return Response.json({ ok: true, role }, { headers: { 'Set-Cookie': sessionCookie(token) } });
 }

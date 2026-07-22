@@ -2,8 +2,8 @@ export type Lang = 'he' | 'en';
 
 // Hebrew is the source of truth; English is the translation.
 const he = {
-  appTitle: 'שיבוץ משמרות',
-  metaTitle: 'שיבוץ משמרות | HP Indigo',
+  appTitle: 'LAB שיבוץ משמרות',
+  metaTitle: 'LAB שיבוץ משמרות | HP Indigo',
   hello: 'שלום,',
   logout: 'התנתקות',
   loading: 'טוען...',
@@ -104,10 +104,18 @@ const he = {
   toDateCol: 'עד תאריך',
   myAbsenceHint: 'סמן כאן חופשה, מחלה או מילואים — בתאריכים אלו לא ניתן יהיה לשבץ אותך למשמרות.',
   addMyAbsenceFailed: 'הוספת ההיעדרות נכשלה',
+  allAbsencesHeading: 'כל ההיעדרויות שלי',
+  noAbsencesAtAll: 'לא נרשמו היעדרויות.',
   deleteBtn: 'מחק',
 
   yearLabel: 'שנה',
   monthLabel: 'חודש',
+  periodLabel: 'תקופה',
+  monthlyOption: 'חודשי',
+  weeklyOption: 'שבועי',
+  shiftsByDayHeading: 'משמרות לפי יום',
+  shiftsTotalHeading: 'סה"כ בוקר מול ערב',
+  absenceBreakdownHeading: 'פילוח היעדרויות לפי עובד',
   viewModeLabel: 'תצוגה',
   byWorkerOption: 'לפי עובד',
   byMachineOption: 'לפי מכונה',
@@ -174,8 +182,8 @@ const he = {
 } as const;
 
 const en: Record<keyof typeof he, string> = {
-  appTitle: 'Shift Scheduling',
-  metaTitle: 'Shift Scheduling | HP Indigo',
+  appTitle: 'LAB Shift Scheduling',
+  metaTitle: 'LAB Shift Scheduling | HP Indigo',
   hello: 'Hello,',
   logout: 'Log out',
   loading: 'Loading...',
@@ -276,10 +284,18 @@ const en: Record<keyof typeof he, string> = {
   toDateCol: 'To date',
   myAbsenceHint: 'Mark vacation, sick days, or reserve duty here — you won’t be schedulable on these dates.',
   addMyAbsenceFailed: 'Failed to add absence',
+  allAbsencesHeading: 'All My Absences',
+  noAbsencesAtAll: 'No absences recorded.',
   deleteBtn: 'Delete',
 
   yearLabel: 'Year',
   monthLabel: 'Month',
+  periodLabel: 'Period',
+  monthlyOption: 'Monthly',
+  weeklyOption: 'Weekly',
+  shiftsByDayHeading: 'Shifts by day',
+  shiftsTotalHeading: 'Morning vs. Evening total',
+  absenceBreakdownHeading: 'Absence breakdown by employee',
   viewModeLabel: 'View',
   byWorkerOption: 'By worker',
   byMachineOption: 'By press',
