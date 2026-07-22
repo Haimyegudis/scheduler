@@ -35,21 +35,28 @@ export default function VacationsClient({ name }: { name: string }) {
     { href: '/vacations', label: t('myVacationsNav') },
   ];
   const [data, setData] = useState<VacationsData | null>(null);
+  const [allAbsences, setAllAbsences] = useState<AbsenceRow[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [form, setForm] = useState({ type: 'vacation', startDate: '', endDate: '' });
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // Two sources on purpose: /api/my-vacations gives the current-year usage summary
+  // (chips below), while /api/my-absences GET returns the technician's full
+  // past/present/future history so they can see everything they've ever marked.
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/my-vacations');
-      if (res.ok) {
-        setData(await res.json());
+      const [vacRes, allRes] = await Promise.all([fetch('/api/my-vacations'), fetch('/api/my-absences')]);
+      if (vacRes.ok) {
+        setData(await vacRes.json());
       } else {
         setError(t('loadError'));
+      }
+      if (allRes.ok) {
+        setAllAbsences((await allRes.json()).absences);
       }
     } catch {
       setError(t('networkErrorRefresh'));
@@ -145,12 +152,12 @@ export default function VacationsClient({ name }: { name: string }) {
               ))}
             </div>
             <div>
-              <h3 className="mb-2 font-bold text-slate-800">{t('absenceDetailsHeading')}</h3>
-              {data.absences.length === 0 ? (
-                <p className="text-sm text-slate-500">{t('noAbsencesThisYear')}</p>
+              <h3 className="mb-2 font-bold text-slate-800">{t('allAbsencesHeading')}</h3>
+              {!allAbsences || allAbsences.length === 0 ? (
+                <p className="text-sm text-slate-500">{t('noAbsencesAtAll')}</p>
               ) : (
                 <ul className="surface-card divide-y divide-slate-100 text-sm">
-                  {data.absences.map(a => (
+                  {allAbsences.map(a => (
                     <li key={a.id} className="flex flex-wrap items-center gap-2 px-4 py-3">
                       <span className="font-semibold text-slate-800">{absenceLabel(lang, a.type)}</span>
                       <span className="text-slate-500">

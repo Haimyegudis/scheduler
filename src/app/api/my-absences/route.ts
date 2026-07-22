@@ -14,6 +14,23 @@ import { getSession } from '@/lib/auth';
 const TYPES = ['vacation', 'sick', 'miluim', 'other'];
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+// All of the caller's own absence records, past/present/future — unlike
+// /api/my-vacations (which is scoped to the current calendar year for the
+// annual-usage summary), this lets a technician see their full history.
+export async function GET(req: Request) {
+  const session = await getSession(req);
+  if (!session || session.role !== 'technician') {
+    return Response.json({ error: 'נדרשת התחברות' }, { status: 401 });
+  }
+  const rows = await prisma.absence.findMany({
+    where: { technicianId: session.userId! },
+    orderBy: [{ startDate: 'desc' }, { id: 'desc' }],
+  });
+  return Response.json({
+    absences: rows.map(a => ({ id: a.id, startDate: a.startDate, endDate: a.endDate, type: a.type })),
+  });
+}
+
 export async function POST(req: Request) {
   const session = await getSession(req);
   if (!session || session.role !== 'technician') {
