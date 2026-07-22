@@ -102,6 +102,8 @@ const he = {
   absencesHeading: 'היעדרויות',
   noAbsencesNote: 'אין היעדרויות.',
   toDateCol: 'עד תאריך',
+  myAbsenceHint: 'סמן כאן חופשה, מחלה או מילואים — בתאריכים אלו לא ניתן יהיה לשבץ אותך למשמרות.',
+  addMyAbsenceFailed: 'הוספת ההיעדרות נכשלה',
   deleteBtn: 'מחק',
 
   yearLabel: 'שנה',
@@ -272,6 +274,8 @@ const en: Record<keyof typeof he, string> = {
   absencesHeading: 'Absences',
   noAbsencesNote: 'No absences.',
   toDateCol: 'To date',
+  myAbsenceHint: 'Mark vacation, sick days, or reserve duty here — you won’t be schedulable on these dates.',
+  addMyAbsenceFailed: 'Failed to add absence',
   deleteBtn: 'Delete',
 
   yearLabel: 'Year',
