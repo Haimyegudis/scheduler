@@ -393,3 +393,77 @@ test('users GET includes role', async () => {
   const { users } = await res.json();
   expect(users[0]).toHaveProperty('role');
 });
+
+test('save schedule auto-approves tester requests whose name is placed on their day', async () => {
+  const tester = await prisma.technician.create({
+    data: { name: 'רון נסיין', email: 'ron@x.com', passwordHash: 'x', role: 'tester' },
+  });
+  const r = await prisma.testerRequest.create({
+    data: { testerId: tester.id, date: DATES[0], shift: 'morning', description: 'ניסוי דיו' },
+  });
+  const res = await saveSchedule(await adminReq('PUT', '/x', {
+    weekStart: WEEK,
+    assignments: [
+      { date: DATES[0], shift: 'evening', stationId: stationIds[0], technicianId: techIds[0], experimenter: 'רון נסיין' },
+    ],
+  }));
+  expect(res.status).toBe(200);
+  const row = await prisma.testerRequest.findUnique({ where: { id: r.id } });
+  expect(row!.status).toBe('approved');
+  expect(row!.assignedStationId).toBe(stationIds[0]);
+
+  // resave without the name → back to pending
+  await saveSchedule(await adminReq('PUT', '/x', {
+    weekStart: WEEK,
+    assignments: [
+      { date: DATES[0], shift: 'evening', stationId: stationIds[0], technicianId: techIds[0] },
+    ],
+  }));
+  const reverted = await prisma.testerRequest.findUnique({ where: { id: r.id } });
+  expect(reverted!.status).toBe('pending');
+  expect(reverted!.assignedStationId).toBeNull();
+});
+
+test('save schedule reconcile prefers requested-shift assignment and skips rejected', async () => {
+  const tester = await prisma.technician.create({
+    data: { name: 'גיל נסיין', email: 'gil@x.com', passwordHash: 'x', role: 'tester' },
+  });
+  const r = await prisma.testerRequest.create({
+    data: { testerId: tester.id, date: DATES[0], shift: 'evening', description: 'x' },
+  });
+  const rejected = await prisma.testerRequest.create({
+    data: { testerId: tester.id, date: DATES[1], shift: 'morning', description: 'y', status: 'rejected' },
+  });
+  await saveSchedule(await adminReq('PUT', '/x', {
+    weekStart: WEEK,
+    assignments: [
+      { date: DATES[0], shift: 'morning', stationId: stationIds[0], technicianId: techIds[0], experimenter: 'גיל נסיין' },
+      { date: DATES[0], shift: 'evening', stationId: stationIds[1], technicianId: techIds[1], experimenter: 'אחר, גיל נסיין' },
+      { date: DATES[1], shift: 'morning', stationId: stationIds[0], technicianId: techIds[2], experimenter: 'גיל נסיין' },
+    ],
+  }));
+  const row = await prisma.testerRequest.findUnique({ where: { id: r.id } });
+  expect(row!.status).toBe('approved');
+  expect(row!.assignedStationId).toBe(stationIds[1]);
+  expect((await prisma.testerRequest.findUnique({ where: { id: rejected.id } }))!.status).toBe('rejected');
+});
+
+test('GET /api/schedule returns testerRequests descriptions for visible schedule', async () => {
+  const tester = await prisma.technician.create({
+    data: { name: 'דנה נסיינית', email: 'dana@x.com', passwordHash: 'x', role: 'tester' },
+  });
+  await prisma.testerRequest.create({
+    data: { testerId: tester.id, date: DATES[0], shift: 'morning', description: 'בדיקת ראשים', status: 'approved', assignedStationId: stationIds[0] },
+  });
+  await saveSchedule(await adminReq('PUT', '/x', {
+    weekStart: WEEK,
+    assignments: [
+      { date: DATES[0], shift: 'morning', stationId: stationIds[0], technicianId: techIds[0], experimenter: 'דנה נסיינית' },
+    ],
+  }));
+  const res = await getSchedule(await adminReq('GET', `/api/schedule?weekStart=${WEEK}`));
+  const data = await res.json();
+  expect(data.testerRequests).toEqual([
+    { date: DATES[0], description: 'בדיקת ראשים', testerName: 'דנה נסיינית' },
+  ]);
+});
