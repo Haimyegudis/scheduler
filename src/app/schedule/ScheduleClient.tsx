@@ -14,13 +14,27 @@ interface ScheduleData {
   stations: StationView[];
 }
 
-export default function ScheduleClient({ name, technicianId }: { name: string; technicianId: number }) {
+export default function ScheduleClient({
+  name,
+  technicianId,
+  role,
+}: {
+  name: string;
+  technicianId: number;
+  role: 'technician' | 'tester';
+}) {
   const { t } = useT();
-  const TECH_LINKS = [
-    { href: '/constraints', label: t('myConstraintsNav') },
-    { href: '/schedule', label: t('scheduleNav') },
-    { href: '/vacations', label: t('myVacationsNav') },
-  ];
+  const TECH_LINKS =
+    role === 'tester'
+      ? [
+          { href: '/schedule', label: t('scheduleNav') },
+          { href: '/requests', label: t('myRequestsNav') },
+        ]
+      : [
+          { href: '/constraints', label: t('myConstraintsNav') },
+          { href: '/schedule', label: t('scheduleNav') },
+          { href: '/vacations', label: t('myVacationsNav') },
+        ];
   const [weekStart, setWeekStart] = useState(getCurrentWeekStart());
   const [data, setData] = useState<ScheduleData | null>(null);
   const [error, setError] = useState('');
@@ -60,16 +74,18 @@ export default function ScheduleClient({ name, technicianId }: { name: string; t
           <p className="py-16 text-center text-slate-500">{t('noScheduleYet')}</p>
         ) : (
           <div className="animate-fade-up">
-            <p className="mb-3 flex items-center gap-2 text-sm text-slate-500">
-              <span className="inline-block h-2.5 w-2.5 rounded-sm bg-brand-100 ring-1 ring-brand-200" />
-              {t('yourShiftsHighlighted')}
-            </p>
+            {role !== 'tester' && (
+              <p className="mb-3 flex items-center gap-2 text-sm text-slate-500">
+                <span className="inline-block h-2.5 w-2.5 rounded-sm bg-brand-100 ring-1 ring-brand-200" />
+                {t('yourShiftsHighlighted')}
+              </p>
+            )}
             <ScheduleTable
               dates={weekDates(weekStart, data.schedule.includeFriday)}
               assignments={data.schedule.assignments}
               technicians={data.technicians}
               stations={data.stations}
-              highlightTechId={technicianId}
+              highlightTechId={role === 'tester' ? undefined : technicianId}
             />
           </div>
         )}
