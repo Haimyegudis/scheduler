@@ -68,6 +68,13 @@ export async function sendPushToAll(payload: PushPayload): Promise<void> {
 // without spamming every technician. `excludeTechnicianId` skips a specific
 // account (e.g. the just-registered user themself, if they happen to be the
 // bootstrap admin) so they don't get notified about their own registration.
+// Sends `payload` only to subscriptions of one technician account (e.g. a tester
+// being told their machine request was approved/rejected). Best-effort like the rest.
+export async function sendPushToTechnician(technicianId: number, payload: PushPayload): Promise<void> {
+  const subscriptions = await prisma.pushSubscription.findMany({ where: { technicianId } }).catch(() => []);
+  await deliverToSubscriptions(subscriptions, payload);
+}
+
 export async function sendPushToAdmins(payload: PushPayload, excludeTechnicianId?: number): Promise<void> {
   const subscriptions = await prisma.pushSubscription
     .findMany({
