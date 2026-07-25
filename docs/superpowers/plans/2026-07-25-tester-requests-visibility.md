@@ -25,14 +25,14 @@ Same as the tester-role plan: Hebrew server errors + `apiErrorMap` mirror, he+en
 - Admin `POST /api/admin/tester-requests` `{ testerId, date, shift, stationId?, description, swVersion?, hwNotes? }` → 200 `{ ok }`; 400 invalid fields / non-tester testerId (error `'נתונים לא תקינים'`).
 - Admin `PUT` approve with `place: true` → also upserts draft schedule + assignment (append `experimenter`, comma-separated; `technicianId` untouched/null).
 
-- [ ] Steps: failing tests (feed cross-tester + future-only; GET without weekStart; POST on-behalf + non-tester 400; PUT place creates schedule/assignment + appends) → run red → implement → run green → commit.
+- [x] Steps: failing tests (feed cross-tester + future-only; GET without weekStart; POST on-behalf + non-tester 400; PUT place creates schedule/assignment + appends) → run red → implement → run green → commit.
 
 ### Task 2: Tester UI — requests-by-day section
 
 **Files:**
 - Modify: `src/app/requests/RequestsClient.tsx`, `src/lib/i18n-dict.ts`
 
-- [ ] Add `all` to load state; group by date; render section `allRequestsHeading` ('בקשות לפי יום' / 'Requests by day') with day headers (`dayName` + `formatDate`) and rows: tester name · `shiftLabel` · press or `anyPressOption` · status chip. Hidden when empty. Typecheck. Commit.
+- [x] Add `all` to load state; group by date; render section `allRequestsHeading` ('בקשות לפי יום' / 'Requests by day') with day headers (`dayName` + `formatDate`) and rows: tester name · `shiftLabel` · press or `anyPressOption` · status chip. Hidden when empty. Typecheck. Commit.
 
 ### Task 3: Admin tab — page, nav links, manual add
 
@@ -40,8 +40,8 @@ Same as the tester-role plan: Hebrew server errors + `apiErrorMap` mirror, he+en
 - Create: `src/app/admin/tester-requests/page.tsx`, `src/app/admin/tester-requests/AdminTesterRequestsClient.tsx`
 - Modify: nav `ADMIN_LINKS_KEYS` in all 5 admin clients + new page, `src/lib/i18n-dict.ts`
 
-- [ ] Page guard mirrors other admin pages. Client loads `GET /api/admin/tester-requests` (upcoming), `GET /api/admin/users` (role === 'tester' for dropdown), `GET /api/admin/stations`. Renders: manual-add form (tester dropdown, date, shift, press optional, description required, SW/HW) → POST; grouped-by-day list with status chips; pending rows get press pick + Approve (confirm dialog, PUT `place: true`) + Reject. New keys: `testerRequestsNav`, `addRequestManuallyHeading`, `selectTesterLabel`, `addBtn` (exists), `approvePlaceConfirm`, `requestAddedMsg`, `noUpcomingRequests`. Typecheck. Commit.
+- [x] Page guard mirrors other admin pages. Client loads `GET /api/admin/tester-requests` (upcoming), `GET /api/admin/users` (role === 'tester' for dropdown), `GET /api/admin/stations`. Renders: manual-add form (tester dropdown, date, shift, press optional, description required, SW/HW) → POST; grouped-by-day list with status chips; pending rows get press pick + Approve (confirm dialog, PUT `place: true`) + Reject. New keys: `testerRequestsNav`, `addRequestManuallyHeading`, `selectTesterLabel`, `addBtn` (exists), `approvePlaceConfirm`, `requestAddedMsg`, `noUpcomingRequests`. Typecheck. Commit.
 
 ### Task 4: Verification
 
-- [ ] `npm test` + `npx tsc --noEmit` + `npm run build` green. Commit any fixes.
+- [x] `npm test` + `npx tsc --noEmit` + `npm run build` green. Commit any fixes.
