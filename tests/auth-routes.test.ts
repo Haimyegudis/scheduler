@@ -1,4 +1,5 @@
 import { test, expect, beforeEach } from 'vitest';
+import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/db';
 import { verifySessionToken } from '@/lib/auth';
 import { ADMIN_EMAIL } from '@/lib/config';
@@ -89,6 +90,23 @@ test('login returns role by isAdmin and fails on bad credentials', async () => {
   expect((await verifySessionToken(cookieToken(adminLogin)))?.role).toBe('admin');
   expect((await login(jsonReq('/x', { email: 'a@b.com', password: 'wrongpass1' }))).status).toBe(401);
   expect((await login(jsonReq('/x', { email: 'no@b.com', password: 'password1' }))).status).toBe(401);
+});
+
+test('login returns tester role for a tester account', async () => {
+  await prisma.technician.create({
+    data: { name: 'נסיין', email: 'tester@x.com', passwordHash: await bcrypt.hash('password1', 10), role: 'tester' },
+  });
+  const res = await login(jsonReq('/x', { email: 'tester@x.com', password: 'password1' }));
+  expect(res.status).toBe(200);
+  expect((await res.json()).role).toBe('tester');
+});
+
+test('login returns admin role when role column says admin even if isAdmin flag is false', async () => {
+  await prisma.technician.create({
+    data: { name: 'א', email: 'roleadmin@x.com', passwordHash: await bcrypt.hash('password1', 10), role: 'admin' },
+  });
+  const res = await login(jsonReq('/x', { email: 'roleadmin@x.com', password: 'password1' }));
+  expect((await res.json()).role).toBe('admin');
 });
 
 test('logout clears the cookie', async () => {

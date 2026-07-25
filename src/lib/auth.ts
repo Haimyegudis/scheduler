@@ -2,8 +2,15 @@ import { SignJWT, jwtVerify } from 'jose';
 
 export interface Session {
   userId?: number;
-  role: 'technician' | 'admin';
+  role: 'technician' | 'admin' | 'tester';
   name: string;
+}
+
+// Single source of truth for mapping a Technician row to a session role.
+// isAdmin is kept for backward compatibility (push targeting, old rows).
+export function sessionRoleOf(tech: { isAdmin: boolean; role: string }): Session['role'] {
+  if (tech.isAdmin || tech.role === 'admin') return 'admin';
+  return tech.role === 'tester' ? 'tester' : 'technician';
 }
 
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 days

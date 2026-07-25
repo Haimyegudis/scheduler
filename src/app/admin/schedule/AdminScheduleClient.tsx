@@ -28,6 +28,18 @@ const key = (date: string, shift: string, stationId: number): CellKey => `${date
 interface Tech { id: number; name: string }
 interface Station { id: number; name: string; position: number; active: boolean }
 interface CellValue { technicianId: number | ''; experimenter: string; note: string; color: string | null }
+interface TesterRequestRow {
+  id: number;
+  date: string;
+  shift: string;
+  stationId: number | null;
+  station: { name: string } | null;
+  swVersion: string | null;
+  hwNotes: string | null;
+  description: string;
+  status: string;
+  tester: { id: number; name: string };
+}
 
 const emptyCell: CellValue = { technicianId: '', experimenter: '', note: '', color: null };
 
@@ -60,6 +72,8 @@ export default function AdminScheduleClient() {
   const [newStationName, setNewStationName] = useState('');
   const [stationDrafts, setStationDrafts] = useState<Record<number, string>>({});
   const [stationsMessage, setStationsMessage] = useState('');
+  const [testerRequests, setTesterRequests] = useState<TesterRequestRow[]>([]);
+  const [requestStationPick, setRequestStationPick] = useState<Record<number, number | ''>>({});
   const [colorPopoverKey, setColorPopoverKey] = useState<CellKey | null>(null);
   const [pendingColor, setPendingColor] = useState<string | null>(null);
   const [popoverAnchor, setPopoverAnchor] = useState<{ top: number; bottom: number; left: number; right: number } | null>(
@@ -84,9 +98,10 @@ export default function AdminScheduleClient() {
     setMessage('');
     setEditing(false);
     try {
-      const [schedRes, overviewRes] = await Promise.all([
+      const [schedRes, overviewRes, requestsRes] = await Promise.all([
         fetch(`/api/schedule?weekStart=${ws}`),
         fetch(`/api/admin/overview?weekStart=${ws}`),
+        fetch(`/api/admin/tester-requests?weekStart=${ws}`),
       ]);
       await loadStations();
       if (schedRes.ok && overviewRes.ok) {
@@ -109,6 +124,14 @@ export default function AdminScheduleClient() {
         setCells(next);
       } else {
         setMessage(t('loadError'));
+      }
+      // Tester requests are non-critical — the board must render even if this fails.
+      if (requestsRes.ok) {
+        const { requests } = await requestsRes.json();
+        setTesterRequests(requests);
+        setRequestStationPick(
+          Object.fromEntries(requests.map((r: TesterRequestRow) => [r.id, r.stationId ?? '']))
+        );
       }
     } catch {
       setMessage(t('networkErrorRefresh'));
@@ -135,9 +158,9 @@ export default function AdminScheduleClient() {
       .sort((a, b) => a.position - b.position);
   }, [stations, cells]);
 
-  const assignmentsPayload = useMemo(() => {
-    const validDates = new Set(weekDates(weekStart, includeFriday));
-    return Object.entries(cells)
+  function buildPayload(cellsMap: Record<CellKey, CellValue>, friday: boolean) {
+    const validDates = new Set(weekDates(weekStart, friday));
+    return Object.entries(cellsMap)
       .filter(
         ([, v]) => v.technicianId !== '' || v.experimenter.trim() !== '' || v.note.trim() !== '' || v.color !== null
       )
@@ -154,7 +177,10 @@ export default function AdminScheduleClient() {
         };
       })
       .filter(a => validDates.has(a.date));
-  }, [cells, weekStart, includeFriday]);
+  }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const assignmentsPayload = useMemo(() => buildPayload(cells, includeFriday), [cells, weekStart, includeFriday]);
 
   const shiftCounts = useMemo(() => {
     const counts = new Map<number, number>();
@@ -272,7 +298,7 @@ export default function AdminScheduleClient() {
     }
   }
 
-  async function saveDraft(overrideFriday?: boolean): Promise<boolean> {
+  async function saveDraft(overrideFriday?: boolean, cellsOverride?: Record<CellKey, CellValue>): Promise<boolean> {
     try {
       const res = await fetch('/api/admin/schedule', {
         method: 'PUT',
@@ -280,7 +306,9 @@ export default function AdminScheduleClient() {
         body: JSON.stringify({
           weekStart,
           includeFriday: overrideFriday ?? includeFriday,
-          assignments: assignmentsPayload,
+          assignments: cellsOverride
+            ? buildPayload(cellsOverride, overrideFriday ?? includeFriday)
+            : assignmentsPayload,
         }),
       });
       if (res.ok) {
@@ -343,6 +371,53 @@ export default function AdminScheduleClient() {
       }
     } catch {
       setMessage(t('networkErrorPublishFailed'));
+    }
+  }
+
+  async function approveRequest(r: TesterRequestRow) {
+    const pick = requestStationPick[r.id];
+    if (pick === '' || pick === undefined) return;
+    const k = key(r.date, r.shift, pick);
+    const cell = cells[k] ?? emptyCell;
+    if (cell.technicianId === '' && !confirm(t('testerAloneConfirm'))) return;
+    const experimenter = cell.experimenter.trim() ? `${cell.experimenter.trim()}, ${r.tester.name}` : r.tester.name;
+    const nextCells = { ...cells, [k]: { ...cell, experimenter } };
+    setCells(nextCells);
+    if (!(await saveDraft(undefined, nextCells))) return;
+    try {
+      const res = await fetch('/api/admin/tester-requests', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: r.id, action: 'approve', stationId: pick }),
+      });
+      if (res.ok) {
+        setMessage(t('requestApprovedMsg'));
+        setTesterRequests(reqs => reqs.map(x => (x.id === r.id ? { ...x, status: 'approved' } : x)));
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setMessage(data.error ? translateApiError(lang, data.error) : t('genericError'));
+      }
+    } catch {
+      setMessage(t('networkError'));
+    }
+  }
+
+  async function rejectRequest(r: TesterRequestRow) {
+    try {
+      const res = await fetch('/api/admin/tester-requests', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: r.id, action: 'reject' }),
+      });
+      if (res.ok) {
+        setMessage(t('requestRejectedMsg'));
+        setTesterRequests(reqs => reqs.map(x => (x.id === r.id ? { ...x, status: 'rejected' } : x)));
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setMessage(data.error ? translateApiError(lang, data.error) : t('genericError'));
+      }
+    } catch {
+      setMessage(t('networkError'));
     }
   }
 
@@ -538,6 +613,66 @@ export default function AdminScheduleClient() {
               <p className="mb-3 rounded-xl border border-brand-100 bg-brand-50 px-3 py-2 text-sm text-brand-800">
                 {message}
               </p>
+            )}
+            {testerRequests.length > 0 && (
+              <div className="surface-card mb-4 p-4">
+                <h3 className="mb-2 font-bold text-slate-900">{t('testerRequestsHeading')}</h3>
+                <ul className="divide-y divide-slate-100">
+                  {testerRequests.map(r => (
+                    <li key={r.id} className="flex flex-wrap items-center gap-2 py-2 text-sm">
+                      <span className="font-medium text-slate-800">{r.tester.name}</span>
+                      <span className="text-slate-600">
+                        {dayName(r.date, lang)} {formatDate(r.date)} · {shiftLabel(lang, r.shift)}
+                      </span>
+                      <span className="text-slate-500">{r.station?.name ?? t('anyPressOption')}</span>
+                      {r.status === 'pending' ? (
+                        <span className="ms-auto flex items-center gap-2">
+                          <select
+                            value={requestStationPick[r.id] ?? ''}
+                            onChange={e =>
+                              setRequestStationPick(p => ({
+                                ...p,
+                                [r.id]: e.target.value === '' ? '' : Number(e.target.value),
+                              }))
+                            }
+                            className="field-sm text-xs"
+                          >
+                            <option value="">{t('stationLabel')}…</option>
+                            {boardStations.map(s => (
+                              <option key={s.id} value={s.id}>{s.name}</option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={() => approveRequest(r)}
+                            disabled={requestStationPick[r.id] === '' || requestStationPick[r.id] === undefined}
+                            className="btn-success btn-sm"
+                          >
+                            {t('approveBtn')}
+                          </button>
+                          <button onClick={() => rejectRequest(r)} className="btn-secondary btn-sm">
+                            {t('rejectBtn')}
+                          </button>
+                        </span>
+                      ) : (
+                        <span
+                          className={`badge ms-auto ${
+                            r.status === 'approved' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-700'
+                          }`}
+                        >
+                          {r.status === 'approved' ? t('statusApprovedReq') : t('statusRejectedReq')}
+                        </span>
+                      )}
+                      <span className="basis-full text-slate-600">{r.description}</span>
+                      {(r.swVersion || r.hwNotes) && (
+                        <span className="basis-full text-xs text-slate-500">
+                          {r.swVersion && <span className="me-3">{t('swShortLabel')}: {r.swVersion}</span>}
+                          {r.hwNotes && <span>{t('hwShortLabel')}: {r.hwNotes}</span>}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
             {boardStations.length === 0 ? (
               <p className="py-16 text-center text-slate-500">{t('noActiveStationsBoardHint')}</p>

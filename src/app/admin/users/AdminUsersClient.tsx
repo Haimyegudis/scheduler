@@ -14,7 +14,7 @@ const ADMIN_LINKS_KEYS = [
 ] as const;
 
 interface AllowedEmail { id: number; email: string }
-interface User { id: number; name: string; email: string; isAdmin: boolean }
+interface User { id: number; name: string; email: string; isAdmin: boolean; role: string }
 
 export default function AdminUsersClient({ myUserId }: { myUserId: number }) {
   const { t, lang } = useT();
@@ -83,13 +83,13 @@ export default function AdminUsersClient({ myUserId }: { myUserId: number }) {
     await load();
   }
 
-  async function toggleAdmin(user: User) {
+  async function setRole(user: User, role: string) {
     setError('');
     try {
       const res = await fetch('/api/admin/users', {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ userId: user.id, isAdmin: !user.isAdmin }),
+        body: JSON.stringify({ userId: user.id, role }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -171,7 +171,7 @@ export default function AdminUsersClient({ myUserId }: { myUserId: number }) {
                     <tr>
                       <th className="th-cell text-start">{t('nameCol')}</th>
                       <th className="th-cell text-start">{t('emailCol')}</th>
-                      <th className="th-cell text-center">{t('adminCol')}</th>
+                      <th className="th-cell text-center">{t('roleCol')}</th>
                       <th className="th-cell"></th>
                     </tr>
                   </thead>
@@ -184,13 +184,16 @@ export default function AdminUsersClient({ myUserId }: { myUserId: number }) {
                         </td>
                         <td className="td-cell" dir="ltr">{u.email}</td>
                         <td className="td-cell text-center">
-                          <input
-                            type="checkbox"
-                            checked={u.isAdmin}
+                          <select
+                            value={u.role}
                             disabled={u.id === myUserId}
-                            onChange={() => toggleAdmin(u)}
-                            className="h-4 w-4 accent-brand-600"
-                          />
+                            onChange={e => setRole(u, e.target.value)}
+                            className="field-sm text-xs"
+                          >
+                            <option value="technician">{t('roleTechnician')}</option>
+                            <option value="tester">{t('roleTester')}</option>
+                            <option value="admin">{t('roleAdmin')}</option>
+                          </select>
                         </td>
                         <td className="td-cell text-center">
                           <button
