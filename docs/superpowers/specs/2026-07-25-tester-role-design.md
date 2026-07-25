@@ -45,8 +45,9 @@ model TesterRequest {
   swVersion    String?
   hwNotes     String?
   description  String      // experiment purpose, required
-  status       String      @default("pending") // pending | approved | rejected
-  assignmentId Int?        // set on approve
+  status            String   @default("pending") // pending | approved | rejected
+  assignedStationId Int?     // set on approve; not an Assignment FK — assignment rows are
+                             // deleted and recreated on every board save, so their IDs are unstable
   createdAt    DateTime    @default(now())
 }
 ```
@@ -73,9 +74,9 @@ model TesterRequest {
 
 - Admin schedule page: pending-requests panel for the displayed week. Each request shows
   tester name, date/shift, requested press or "any", description, SW/HW. Actions:
-  - **Approve** → choose press cell (prefilled from request when specified) → writes tester
-    name into the assignment's `experimenter` field and links `assignmentId`.
-  - **Reject** → optional reason.
+  - **Approve** → choose press (prefilled from request when specified) → writes tester
+    name into the assignment's `experimenter` field and records `assignedStationId`.
+  - **Reject** → status flips to rejected (no reason field — YAGNI).
 - Alone rule: approving onto a press/shift whose assignment has no technician shows a
   confirmation dialog ("Tester will be alone on this press") with override.
 - Users page: role selector (worker / tester / admin) per user.
