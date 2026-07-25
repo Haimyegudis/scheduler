@@ -20,6 +20,15 @@ interface RequestRow {
   assignedStationId: number | null;
 }
 interface Station { id: number; name: string }
+interface FeedRow {
+  id: number;
+  date: string;
+  shift: string;
+  station: { name: string } | null;
+  status: string;
+  description: string;
+  tester: { name: string };
+}
 
 const STATUS_BADGE: Record<string, string> = {
   pending: 'bg-amber-100 text-amber-800',
@@ -34,6 +43,7 @@ export default function RequestsClient({ name }: { name: string }) {
     { href: '/requests', label: t('myRequestsNav') },
   ];
   const [requests, setRequests] = useState<RequestRow[]>([]);
+  const [allRequests, setAllRequests] = useState<FeedRow[]>([]);
   const [stations, setStations] = useState<Station[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -51,6 +61,7 @@ export default function RequestsClient({ name }: { name: string }) {
       if (res.ok) {
         const data = await res.json();
         setRequests(data.requests);
+        setAllRequests(data.all ?? []);
         setStations(data.stations);
       } else {
         setError(t('loadError'));
@@ -181,6 +192,35 @@ export default function RequestsClient({ name }: { name: string }) {
             <button type="submit" className="btn-primary">{t('submitRequestBtn')}</button>
           </form>
         </section>
+        {allRequests.length > 0 && (
+          <section>
+            <h2 className="mb-3 font-bold text-slate-900">{t('allRequestsHeading')}</h2>
+            <div className="surface-card divide-y divide-slate-100">
+              {[...new Set(allRequests.map(r => r.date))].map(d => (
+                <div key={d} className="px-4 py-3">
+                  <p className="mb-1 text-sm font-semibold text-slate-700">
+                    {dayName(d, lang)} {formatDate(d)}
+                  </p>
+                  <ul className="space-y-1">
+                    {allRequests
+                      .filter(r => r.date === d)
+                      .map(r => (
+                        <li key={r.id} className="flex flex-wrap items-center gap-2 text-sm">
+                          <span className="font-medium text-slate-800">{r.tester.name}</span>
+                          <span className="text-slate-500">
+                            {shiftLabel(lang, r.shift)} · {r.station?.name ?? t('anyPressOption')}
+                          </span>
+                          <span className={`badge ms-auto ${STATUS_BADGE[r.status] ?? STATUS_BADGE.pending}`}>
+                            {statusLabel(r.status)}
+                          </span>
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
         <section>
           <h2 className="mb-3 font-bold text-slate-900">{t('myRequestsHeading')}</h2>
           {loading ? (
