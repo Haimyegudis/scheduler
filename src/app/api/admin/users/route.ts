@@ -5,7 +5,7 @@ export async function GET(req: Request) {
   const session = await getSession(req);
   if (session?.role !== 'admin') return Response.json({ error: 'אין הרשאה' }, { status: 403 });
   const users = await prisma.technician.findMany({
-    select: { id: true, name: true, email: true, isAdmin: true },
+    select: { id: true, name: true, email: true, isAdmin: true, role: true },
     orderBy: { name: 'asc' },
   });
   return Response.json({ users });
@@ -14,9 +14,17 @@ export async function GET(req: Request) {
 export async function PUT(req: Request) {
   const session = await getSession(req);
   if (session?.role !== 'admin') return Response.json({ error: 'אין הרשאה' }, { status: 403 });
-  const body = (await req.json().catch(() => ({}))) as { userId?: number; isAdmin?: boolean };
-  const { userId, isAdmin } = body;
-  if (typeof userId !== 'number' || typeof isAdmin !== 'boolean') {
+  const body = (await req.json().catch(() => ({}))) as { userId?: number; isAdmin?: boolean; role?: string };
+  const { userId } = body;
+  const role =
+    typeof body.role === 'string'
+      ? body.role
+      : typeof body.isAdmin === 'boolean'
+        ? body.isAdmin
+          ? 'admin'
+          : 'technician'
+        : undefined;
+  if (typeof userId !== 'number' || !role || !['technician', 'tester', 'admin'].includes(role)) {
     return Response.json({ error: 'נתונים לא תקינים' }, { status: 400 });
   }
   if (userId === session.userId) {
@@ -24,7 +32,7 @@ export async function PUT(req: Request) {
   }
   const user = await prisma.technician.findUnique({ where: { id: userId } });
   if (!user) return Response.json({ error: 'משתמש לא נמצא' }, { status: 404 });
-  await prisma.technician.update({ where: { id: userId }, data: { isAdmin } });
+  await prisma.technician.update({ where: { id: userId }, data: { role, isAdmin: role === 'admin' } });
   return Response.json({ ok: true });
 }
 

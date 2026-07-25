@@ -371,3 +371,25 @@ test('save schedule strips unknown keys from assignment rows before writing', as
   expect(row.scheduleId).toBe(schedule!.id);
   expect(row.evil).toBeUndefined();
 });
+
+test('users PUT accepts role param and syncs isAdmin', async () => {
+  const me = await prisma.technician.create({
+    data: { name: 'אני2', email: 'me2@x.com', passwordHash: 'x', isAdmin: true },
+  });
+  const target = techIds[0];
+  expect((await setUserAdmin(await adminReq('PUT', '/x', { userId: target, role: 'tester' }, me.id))).status).toBe(200);
+  let row = await prisma.technician.findUnique({ where: { id: target } });
+  expect(row!.role).toBe('tester');
+  expect(row!.isAdmin).toBe(false);
+  expect((await setUserAdmin(await adminReq('PUT', '/x', { userId: target, role: 'admin' }, me.id))).status).toBe(200);
+  row = await prisma.technician.findUnique({ where: { id: target } });
+  expect(row!.role).toBe('admin');
+  expect(row!.isAdmin).toBe(true);
+  expect((await setUserAdmin(await adminReq('PUT', '/x', { userId: target, role: 'boss' }, me.id))).status).toBe(400);
+});
+
+test('users GET includes role', async () => {
+  const res = await listUsers(await adminReq('GET', '/x'));
+  const { users } = await res.json();
+  expect(users[0]).toHaveProperty('role');
+});
