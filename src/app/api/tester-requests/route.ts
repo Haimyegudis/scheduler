@@ -10,15 +10,23 @@ export async function GET(req: Request) {
   const session = await getSession(req);
   if (!session) return Response.json({ error: 'נדרשת התחברות' }, { status: 401 });
   if (session.role !== 'tester') return Response.json({ error: 'אין הרשאה' }, { status: 403 });
-  const [requests, stations] = await Promise.all([
+  const today = new Date().toISOString().slice(0, 10);
+  const [requests, stations, all] = await Promise.all([
     prisma.testerRequest.findMany({
       where: { testerId: session.userId },
       include: { station: { select: { name: true } } },
       orderBy: { createdAt: 'desc' },
     }),
     prisma.station.findMany({ where: { active: true }, select: { id: true, name: true }, orderBy: { position: 'asc' } }),
+    // Upcoming requests of every tester — shown to all testers so they see who
+    // asked for a machine on each day.
+    prisma.testerRequest.findMany({
+      where: { date: { gte: today } },
+      include: { tester: { select: { name: true } }, station: { select: { name: true } } },
+      orderBy: [{ date: 'asc' }, { shift: 'asc' }],
+    }),
   ]);
-  return Response.json({ requests, stations });
+  return Response.json({ requests, stations, all });
 }
 
 export async function POST(req: Request) {
