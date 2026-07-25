@@ -21,23 +21,40 @@ export interface StationView {
   position: number;
 }
 
+export interface TesterRequestView {
+  date: string;
+  description: string;
+  testerName: string;
+}
+
 export default function ScheduleTable({
   dates,
   assignments,
   technicians,
   stations,
   highlightTechId,
+  testerRequests = [],
 }: {
   dates: string[];
   assignments: AssignmentView[];
   technicians: Array<{ id: number; name: string }>;
   stations: StationView[];
   highlightTechId?: number;
+  testerRequests?: TesterRequestView[];
 }) {
   const { t, lang } = useT();
   const nameOf = (id: number) => technicians.find(t => t.id === id)?.name ?? '?';
   const cell = (date: string, shift: string, stationId: number) =>
     assignments.find(a => a.date === date && a.shift === shift && a.stationId === stationId);
+  // Descriptions of approved machine requests whose tester is named in this cell's
+  // experimenter field (comma-separated names) on the same day.
+  const descriptionsFor = (date: string, experimenter: string | null | undefined) => {
+    const names = (experimenter ?? '')
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+    return testerRequests.filter(r => r.date === date && names.includes(r.testerName));
+  };
   const orderedStations = stations.slice().sort((a, b) => a.position - b.position);
 
   return (
@@ -97,6 +114,11 @@ export default function ScheduleTable({
                               {t('experimenterLabel')}: {a.experimenter}
                             </div>
                           )}
+                          {descriptionsFor(date, a.experimenter).map(r => (
+                            <div key={`${r.testerName}-${r.date}`} className="text-[11px] font-normal text-slate-400 italic">
+                              {r.description}
+                            </div>
+                          ))}
                           {a.note && (
                             <div className="text-xs font-normal text-slate-500">
                               {t('noteLabel')}: {a.note}

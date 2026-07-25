@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import NavBar from '@/components/NavBar';
 import WeekNav from '@/components/WeekNav';
 import Loading from '@/components/Loading';
-import ScheduleTable, { type AssignmentView, type StationView } from '@/components/ScheduleTable';
+import ScheduleTable, { type AssignmentView, type StationView, type TesterRequestView } from '@/components/ScheduleTable';
 import { getCurrentWeekStart, weekDates } from '@/lib/dates';
 import { useT } from '@/lib/i18n';
 
@@ -12,6 +12,7 @@ interface ScheduleData {
   schedule: { status: string; includeFriday: boolean; assignments: AssignmentView[] } | null;
   technicians: Array<{ id: number; name: string }>;
   stations: StationView[];
+  testerRequests?: TesterRequestView[];
 }
 
 export default function ScheduleClient({
@@ -86,6 +87,7 @@ export default function ScheduleClient({
               technicians={data.technicians}
               stations={data.stations}
               highlightTechId={role === 'tester' ? undefined : technicianId}
+              testerRequests={data.testerRequests ?? []}
             />
           </div>
         )}

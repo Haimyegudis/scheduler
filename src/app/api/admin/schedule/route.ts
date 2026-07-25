@@ -101,5 +101,33 @@ export async function PUT(req: Request) {
       })),
     }),
   ]);
+
+  // Reconcile tester requests for this week: placing a tester's name in a cell's
+  // experimenter on their requested day is the approval; removing it reverts the
+  // request to pending. Rejected requests are never touched. Prefers an assignment
+  // on the requested shift when the name appears in both shifts of the day.
+  const requests = await prisma.testerRequest.findMany({
+    where: { date: { in: weekDates(weekStart, true) }, status: { not: 'rejected' } },
+    include: { tester: { select: { name: true } } },
+  });
+  if (requests.length > 0) {
+    const namesIn = (exp: string | null | undefined) =>
+      (exp ?? '')
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean);
+    const updates = [];
+    for (const r of requests) {
+      const matches = assignments.filter(a => a.date === r.date && namesIn(a.experimenter).includes(r.tester.name));
+      const chosen = matches.find(a => a.shift === r.shift) ?? matches[0];
+      const status = chosen ? 'approved' : 'pending';
+      const assignedStationId = chosen ? chosen.stationId : null;
+      if (r.status !== status || r.assignedStationId !== assignedStationId) {
+        updates.push(prisma.testerRequest.update({ where: { id: r.id }, data: { status, assignedStationId } }));
+      }
+    }
+    if (updates.length > 0) await prisma.$transaction(updates);
+  }
+
   return Response.json({ ok: true });
 }

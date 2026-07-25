@@ -46,6 +46,8 @@ const he = {
   testerAloneConfirm: 'אין עובד משובץ במשמרת זו על המכונה — לשבץ את הנסיין לבד?',
   requestApprovedMsg: 'הבקשה אושרה ושובצה',
   requestRejectedMsg: 'הבקשה נדחתה',
+  manualEntryOption: 'הזנה ידנית…',
+  testerRequestedPrefix: 'ביקש:',
   swShortLabel: 'תוכנה',
   hwShortLabel: 'חומרה',
 
@@ -262,6 +264,8 @@ const en: Record<keyof typeof he, string> = {
   testerAloneConfirm: 'No worker is assigned to this press shift — place the tester alone?',
   requestApprovedMsg: 'Request approved and placed',
   requestRejectedMsg: 'Request rejected',
+  manualEntryOption: 'Manual entry…',
+  testerRequestedPrefix: 'Requested:',
   swShortLabel: 'SW',
   hwShortLabel: 'HW',
 

@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { weekDates } from '@/lib/dates';
 
 export async function GET(req: Request) {
   const session = await getSession(req);
@@ -35,11 +36,22 @@ export async function GET(req: Request) {
     select: { id: true, name: true, position: true },
     orderBy: { position: 'asc' },
   });
+  // Approved machine-request descriptions, shown under the tester's name in the table.
+  const testerRequests = visible
+    ? (
+        await prisma.testerRequest.findMany({
+          where: { date: { in: weekDates(weekStart, true) }, status: 'approved' },
+          include: { tester: { select: { name: true } } },
+          orderBy: { date: 'asc' },
+        })
+      ).map(r => ({ date: r.date, description: r.description, testerName: r.tester.name }))
+    : [];
   return Response.json({
     schedule: visible
       ? { status: schedule.status, includeFriday: schedule.includeFriday, assignments: schedule.assignments }
       : null,
     technicians,
     stations,
+    testerRequests,
   });
 }
