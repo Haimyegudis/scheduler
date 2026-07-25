@@ -25,6 +25,7 @@ interface Overview {
 const ADMIN_LINKS_KEYS = [
   { href: '/admin', key: 'dashboardNav' },
   { href: '/admin/schedule', key: 'scheduleNav' },
+  { href: '/admin/tester-requests', key: 'testerRequestsNav' },
   { href: '/admin/users', key: 'usersNav' },
   { href: '/admin/absences', key: 'absencesNav' },
   { href: '/admin/reports', key: 'reportsNav' },
