@@ -1,6 +1,7 @@
 import { test, expect, beforeEach } from 'vitest';
 import { prisma } from '@/lib/db';
 import { createSessionToken } from '@/lib/auth';
+import { addDays } from '@/lib/dates';
 import { GET, POST, DELETE } from '@/app/api/tester-requests/route';
 
 const DATE = '2026-07-20';
@@ -20,8 +21,8 @@ let stationId: number;
 beforeEach(async () => {
   await prisma.testerRequest.deleteMany();
   await prisma.technician.deleteMany();
-  await prisma.station.deleteMany();
   await prisma.schedule.deleteMany();
+  await prisma.station.deleteMany();
   const t = await prisma.technician.create({
     data: { name: 'נסיין', email: 'n@x.com', passwordHash: 'x', role: 'tester' },
   });
@@ -87,4 +88,22 @@ test('DELETE refuses non-pending and foreign requests', async () => {
     data: { testerId, date: DATE, shift: 'morning', description: 'x', status: 'approved' },
   });
   expect((await DELETE(await req('DELETE', 'tester', testerId, { id: approved.id }))).status).toBe(400);
+});
+
+test('GET all lists upcoming requests of every tester with names, past excluded', async () => {
+  const other = await prisma.technician.create({
+    data: { name: 'נסיין ב', email: 'b2@x.com', passwordHash: 'x', role: 'tester' },
+  });
+  const today = new Date().toISOString().slice(0, 10);
+  await prisma.testerRequest.createMany({
+    data: [
+      { testerId, date: today, shift: 'morning', description: 'mine' },
+      { testerId: other.id, date: addDays(today, 2), shift: 'evening', description: 'theirs' },
+      { testerId: other.id, date: addDays(today, -3), shift: 'morning', description: 'old' },
+    ],
+  });
+  const { all } = await (await GET(await req('GET', 'tester', testerId))).json();
+  expect(all).toHaveLength(2);
+  expect(all.map((r: { tester: { name: string } }) => r.tester.name).sort()).toEqual(['נסיין', 'נסיין ב']);
+  expect(all[0].date <= all[1].date).toBe(true);
 });

@@ -1,7 +1,8 @@
 import { test, expect, beforeEach } from 'vitest';
 import { prisma } from '@/lib/db';
 import { createSessionToken } from '@/lib/auth';
-import { GET, PUT } from '@/app/api/admin/tester-requests/route';
+import { addDays } from '@/lib/dates';
+import { GET, PUT, POST } from '@/app/api/admin/tester-requests/route';
 
 const WEEK = '2026-07-19';
 
@@ -20,6 +21,7 @@ let stationId: number;
 beforeEach(async () => {
   await prisma.testerRequest.deleteMany();
   await prisma.technician.deleteMany();
+  await prisma.schedule.deleteMany();
   await prisma.station.deleteMany();
   const t = await prisma.technician.create({ data: { name: 'נסיין', email: 'n@x.com', passwordHash: 'x', role: 'tester' } });
   testerId = t.id;
@@ -74,4 +76,58 @@ test('requires admin session', async () => {
   const token = await createSessionToken({ userId: testerId, role: 'tester', name: 'נ' });
   const res = await GET(new Request(`http://test/x?weekStart=${WEEK}`, { headers: { cookie: `session=${token}` } }));
   expect(res.status).toBe(403);
+});
+
+test('GET without weekStart returns upcoming requests only', async () => {
+  const today = new Date().toISOString().slice(0, 10);
+  await prisma.testerRequest.createMany({
+    data: [
+      { testerId, date: addDays(today, -1), shift: 'morning', description: 'old' },
+      { testerId, date: addDays(today, 1), shift: 'morning', description: 'soon' },
+    ],
+  });
+  const res = await GET(await adminReq('GET', '/api/admin/tester-requests'));
+  expect(res.status).toBe(200);
+  const { requests } = await res.json();
+  expect(requests).toHaveLength(1);
+  expect(requests[0].description).toBe('soon');
+});
+
+test('POST creates a request on behalf of a tester', async () => {
+  const res = await POST(await adminReq('POST', '/x', { testerId, date: '2026-07-20', shift: 'morning', stationId, description: 'ניסוי' }));
+  expect(res.status).toBe(200);
+  const rows = await prisma.testerRequest.findMany();
+  expect(rows).toHaveLength(1);
+  expect(rows[0]).toMatchObject({ testerId, stationId, status: 'pending', description: 'ניסוי' });
+});
+
+test('POST rejects non-tester testerId and bad fields', async () => {
+  const worker = await prisma.technician.create({ data: { name: 'ע', email: 'w@x.com', passwordHash: 'x' } });
+  expect((await POST(await adminReq('POST', '/x', { testerId: worker.id, date: '2026-07-20', shift: 'morning', description: 'x' }))).status).toBe(400);
+  expect((await POST(await adminReq('POST', '/x', { testerId, date: 'bad', shift: 'morning', description: 'x' }))).status).toBe(400);
+  expect((await POST(await adminReq('POST', '/x', { testerId, date: '2026-07-20', shift: 'morning', description: '' }))).status).toBe(400);
+});
+
+test('PUT approve with place creates draft schedule and assignment with experimenter', async () => {
+  const r = await prisma.testerRequest.create({ data: { testerId, date: '2026-07-20', shift: 'morning', description: 'x' } });
+  const res = await PUT(await adminReq('PUT', '/x', { id: r.id, action: 'approve', stationId, place: true }));
+  expect(res.status).toBe(200);
+  const schedule = await prisma.schedule.findUnique({ where: { weekStart: '2026-07-19' }, include: { assignments: true } });
+  expect(schedule).not.toBeNull();
+  expect(schedule!.status).toBe('draft');
+  expect(schedule!.assignments).toHaveLength(1);
+  expect(schedule!.assignments[0]).toMatchObject({
+    date: '2026-07-20', shift: 'morning', stationId, technicianId: null, experimenter: 'נסיין',
+  });
+});
+
+test('PUT approve with place appends to occupied experimenter cell', async () => {
+  const schedule = await prisma.schedule.create({ data: { weekStart: '2026-07-19', status: 'draft' } });
+  await prisma.assignment.create({
+    data: { scheduleId: schedule.id, date: '2026-07-20', shift: 'morning', stationId, experimenter: 'קיים' },
+  });
+  const r = await prisma.testerRequest.create({ data: { testerId, date: '2026-07-20', shift: 'morning', description: 'x' } });
+  await PUT(await adminReq('PUT', '/x', { id: r.id, action: 'approve', stationId, place: true }));
+  const a = await prisma.assignment.findFirst({ where: { scheduleId: schedule.id } });
+  expect(a!.experimenter).toBe('קיים, נסיין');
 });
