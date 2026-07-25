@@ -30,7 +30,7 @@
 **Interfaces:**
 - Produces: `Technician.role: string` (default `"technician"`), `prisma.testerRequest` client with fields `id, testerId, date, shift, stationId?, swVersion?, hwNotes?, description, status, assignedStationId?, createdAt`.
 
-- [ ] **Step 1: Flip provider to sqlite and add schema changes**
+- [x] **Step 1: Flip provider to sqlite and add schema changes**
 
 In `prisma/schema.prisma`, change the datasource block:
 
@@ -80,12 +80,12 @@ model TesterRequest {
 }
 ```
 
-- [ ] **Step 2: Regenerate client against dev db**
+- [x] **Step 2: Regenerate client against dev db**
 
 Run: `npx prisma db push` (uses `.env` dev DATABASE_URL) — if no local `.env`, run with `DATABASE_URL=file:./prisma/dev.db`. Then `npx prisma generate`.
 Expected: no errors; client has `prisma.testerRequest`.
 
-- [ ] **Step 3: Write the production migration**
+- [x] **Step 3: Write the production migration**
 
 Create `neon-migrate-tester-role.sql`:
 
@@ -109,12 +109,12 @@ CREATE TABLE IF NOT EXISTS "TesterRequest" (
 );
 ```
 
-- [ ] **Step 4: Run the existing test suite**
+- [x] **Step 4: Run the existing test suite**
 
 Run: `npm test`
 Expected: all existing tests pass (global-setup re-pushes schema to `file:./test.db`).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add prisma/schema.prisma neon-migrate-tester-role.sql
@@ -135,7 +135,7 @@ git commit -m "feat: add tester role column and TesterRequest model"
 - Produces: `Session.role: 'technician' | 'admin' | 'tester'`; helper `sessionRoleOf(tech: { isAdmin: boolean; role: string }): Session['role']` exported from `src/lib/auth.ts`.
 - Consumes: `Technician.role` from Task 1.
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Append to `tests/auth-routes.test.ts` (match that file's existing helpers/imports; it imports the login/register handlers):
 
@@ -168,12 +168,12 @@ test('login returns admin role when role column says admin even if isAdmin flag 
 
 If `bcrypt` isn't imported in that test file, add `import bcrypt from 'bcryptjs';`.
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `npx vitest run tests/auth-routes.test.ts`
 Expected: FAIL — login returns `technician` for the tester account.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/lib/auth.ts` — change the union and add the helper:
 
@@ -202,12 +202,12 @@ export function sessionRoleOf(tech: { isAdmin: boolean; role: string }): Session
 
 `src/app/api/auth/register/route.ts` — in the `create` data add `role: isBootstrapAdmin ? 'admin' : 'technician'`, and replace the `const role = ...` line with `const role = sessionRoleOf(tech);` (same import).
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `npx vitest run tests/auth-routes.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/lib/auth.ts src/app/api/auth/login/route.ts src/app/api/auth/register/route.ts tests/auth-routes.test.ts
@@ -228,7 +228,7 @@ git commit -m "feat: tester session role derived from Technician.role"
 - Produces: `GET /api/admin/users` → `users: [{ id, name, email, isAdmin, role }]`; `PUT /api/admin/users` accepts `{ userId, role: 'technician'|'tester'|'admin' }` (new) OR legacy `{ userId, isAdmin: boolean }`; both keep `isAdmin === (role === 'admin')` in sync.
 - Consumes: `sessionRoleOf` semantics from Task 2.
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Append to `tests/admin-routes.test.ts`:
 
@@ -256,12 +256,12 @@ test('users GET includes role', async () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `npx vitest run tests/admin-routes.test.ts`
 Expected: FAIL (role ignored / missing).
 
-- [ ] **Step 3: Implement API**
+- [x] **Step 3: Implement API**
 
 `src/app/api/admin/users/route.ts`:
 - GET: add `role: true` to the `select`.
@@ -284,12 +284,12 @@ Expected: FAIL (role ignored / missing).
   return Response.json({ ok: true });
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `npx vitest run tests/admin-routes.test.ts`
 Expected: PASS, including the pre-existing `isAdmin`-body test.
 
-- [ ] **Step 5: i18n keys**
+- [x] **Step 5: i18n keys**
 
 In `src/lib/i18n-dict.ts` add to `he` (near `adminCol`) and mirror in `en`:
 
@@ -300,7 +300,7 @@ In `src/lib/i18n-dict.ts` add to `he` (near `adminCol`) and mirror in `en`:
   roleAdmin: 'מנהל',                 // en: 'Admin'
 ```
 
-- [ ] **Step 6: Users page role dropdown**
+- [x] **Step 6: Users page role dropdown**
 
 `src/app/admin/users/AdminUsersClient.tsx`:
 - `interface User` → add `role: string`.
@@ -343,7 +343,7 @@ In `src/lib/i18n-dict.ts` add to `he` (near `adminCol`) and mirror in `en`:
   }
 ```
 
-- [ ] **Step 7: Typecheck + full tests + commit**
+- [x] **Step 7: Typecheck + full tests + commit**
 
 Run: `npx tsc --noEmit && npm test`
 Expected: clean.
@@ -371,7 +371,7 @@ git commit -m "feat: role management (worker/tester/admin) on users page"
   - `sendPushToTechnician(technicianId: number, payload: PushPayload): Promise<void>` in `src/lib/push.ts`.
 - Consumes: `Session.role === 'tester'` (Task 2), `prisma.testerRequest` (Task 1).
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Create `tests/tester-requests-routes.test.ts`:
 
@@ -468,12 +468,12 @@ test('DELETE refuses non-pending and foreign requests', async () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `npx vitest run tests/tester-requests-routes.test.ts`
 Expected: FAIL — module `@/app/api/tester-requests/route` not found.
 
-- [ ] **Step 3: Add `sendPushToTechnician`**
+- [x] **Step 3: Add `sendPushToTechnician`**
 
 Append to `src/lib/push.ts`:
 
@@ -486,7 +486,7 @@ export async function sendPushToTechnician(technicianId: number, payload: PushPa
 }
 ```
 
-- [ ] **Step 4: Implement the route**
+- [x] **Step 4: Implement the route**
 
 Create `src/app/api/tester-requests/route.ts`:
 
@@ -584,7 +584,7 @@ export async function DELETE(req: Request) {
 }
 ```
 
-- [ ] **Step 5: apiErrorMap entries**
+- [x] **Step 5: apiErrorMap entries**
 
 In `src/lib/i18n-dict.ts` `apiErrorMap` add:
 
@@ -594,12 +594,12 @@ In `src/lib/i18n-dict.ts` `apiErrorMap` add:
   'לא ניתן לבטל בקשה שכבר טופלה': 'A request that was already handled cannot be canceled',
 ```
 
-- [ ] **Step 6: Run tests**
+- [x] **Step 6: Run tests**
 
 Run: `npx vitest run tests/tester-requests-routes.test.ts`
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/app/api/tester-requests src/lib/push.ts src/lib/i18n-dict.ts tests/tester-requests-routes.test.ts
@@ -620,7 +620,7 @@ git commit -m "feat: tester machine-request API (create/list/cancel)"
   - `PUT /api/admin/tester-requests` body `{ id, action: 'approve', stationId }` or `{ id, action: 'reject' }` → `{ ok: true }`; approve sets `status='approved', assignedStationId=stationId`; reject sets `status='rejected'`; both push to the tester.
 - Consumes: `sendPushToTechnician` (Task 4), `weekDates` from `@/lib/dates`.
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Create `tests/admin-tester-requests-routes.test.ts`:
 
@@ -704,12 +704,12 @@ test('requires admin session', async () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `npx vitest run tests/admin-tester-requests-routes.test.ts`
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Create `src/app/api/admin/tester-requests/route.ts`:
 
@@ -786,12 +786,12 @@ export async function PUT(req: Request) {
 
 Note: `formatDate` — confirm it exists in `@/lib/dates` (it's used by AdminScheduleClient); if its signature is `formatDate(date: string)` returning `DD/MM`, use as-is. Merge the two imports from `@/lib/dates` into one line.
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `npx vitest run tests/admin-tester-requests-routes.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/app/api/admin/tester-requests tests/admin-tester-requests-routes.test.ts
@@ -812,7 +812,7 @@ git commit -m "feat: admin API to review tester machine requests"
 - Consumes: `GET/POST/DELETE /api/tester-requests` (Task 4).
 - Produces: tester nav links `[{ href: '/schedule' }, { href: '/requests' }]`; `ScheduleClient` prop `role: 'technician' | 'tester'`.
 
-- [ ] **Step 1: i18n keys**
+- [x] **Step 1: i18n keys**
 
 Add to `he` and mirror in `en` in `src/lib/i18n-dict.ts`:
 
@@ -839,7 +839,7 @@ Add to `he` and mirror in `en` in `src/lib/i18n-dict.ts`:
 
 (`shiftLabel(lang, shift)` from `@/lib/labels` renders shift names — reuse, no new keys.)
 
-- [ ] **Step 2: Server page**
+- [x] **Step 2: Server page**
 
 Create `src/app/requests/page.tsx`:
 
@@ -858,7 +858,7 @@ export default async function RequestsPage() {
 }
 ```
 
-- [ ] **Step 3: Client page**
+- [x] **Step 3: Client page**
 
 Create `src/app/requests/RequestsClient.tsx`:
 
@@ -1090,7 +1090,7 @@ export default function RequestsClient({ name }: { name: string }) {
 }
 ```
 
-- [ ] **Step 4: Redirects + schedule access**
+- [x] **Step 4: Redirects + schedule access**
 
 `src/app/page.tsx` line 9:
 
@@ -1125,11 +1125,11 @@ export default function RequestsClient({ name }: { name: string }) {
 
 - Hide the "your shifts highlighted" hint for testers: wrap that `<p>` with `{role !== 'tester' && (...)}` and pass `highlightTechId={role === 'tester' ? undefined : technicianId}`.
 
-- [ ] **Step 5: Verify guards on other pages**
+- [x] **Step 5: Verify guards on other pages**
 
 Check `src/app/constraints/page.tsx` and `src/app/vacations/page.tsx` redirect any non-`technician` role away (they already check `session.role !== 'technician'`; tester lands on `/login` → `/` → `/requests`, acceptable). If a page checks only `!session`, tighten it to require `technician`.
 
-- [ ] **Step 6: Typecheck + tests + commit**
+- [x] **Step 6: Typecheck + tests + commit**
 
 Run: `npx tsc --noEmit && npm test`
 Expected: clean.
@@ -1151,7 +1151,7 @@ git commit -m "feat: tester machine-requests page and read-only schedule access"
 - Consumes: `GET/PUT /api/admin/tester-requests` (Task 5); existing `cells` state, `saveDraft`, `key()` helper.
 - Produces: `saveDraft(overrideFriday?: boolean, cellsOverride?: Record<CellKey, CellValue>): Promise<boolean>` (extended signature — payload built from `cellsOverride` when given).
 
-- [ ] **Step 1: i18n keys**
+- [x] **Step 1: i18n keys**
 
 Add to `he`, mirror in `en`:
 
@@ -1169,7 +1169,7 @@ Add to `he`, mirror in `en`:
 
 (reuse `anyPressOption`, `statusPendingReq`/`statusApprovedReq`/`statusRejectedReq` from Task 6.)
 
-- [ ] **Step 2: Extract payload builder + extend saveDraft**
+- [x] **Step 2: Extract payload builder + extend saveDraft**
 
 In `AdminScheduleClient.tsx`, replace the `assignmentsPayload` memo body with a call to a plain function so approval can build a payload from not-yet-committed state:
 
@@ -1212,7 +1212,7 @@ Extend `saveDraft`:
   }
 ```
 
-- [ ] **Step 3: Load requests with the week**
+- [x] **Step 3: Load requests with the week**
 
 Add state + types near the other state hooks:
 
@@ -1259,7 +1259,7 @@ and after the existing ok-handling (requests are non-critical — board must ren
       }
 ```
 
-- [ ] **Step 4: Approve / reject handlers**
+- [x] **Step 4: Approve / reject handlers**
 
 ```tsx
   async function approveRequest(r: TesterRequestRow) {
@@ -1310,7 +1310,7 @@ and after the existing ok-handling (requests are non-critical — board must ren
   }
 ```
 
-- [ ] **Step 5: Render the panel**
+- [x] **Step 5: Render the panel**
 
 In the edit view (inside the `!cleanView` branch, right after the action-button row and message `<p>`, before the board table), render when the week has requests:
 
@@ -1379,12 +1379,12 @@ In the edit view (inside the `!cleanView` branch, right after the action-button 
 
 Check `btn-success btn-sm` / `btn-secondary btn-sm` exist in `globals.css` (they're used elsewhere — `btn-success` on publish, `btn-sm` on station buttons); if a combo is missing, use the closest existing class.
 
-- [ ] **Step 6: Typecheck + full tests**
+- [x] **Step 6: Typecheck + full tests**
 
 Run: `npx tsc --noEmit && npm test`
 Expected: clean.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/app/admin/schedule/AdminScheduleClient.tsx src/lib/i18n-dict.ts
@@ -1398,12 +1398,12 @@ git commit -m "feat: tester-request review panel on admin board with alone-press
 **Files:**
 - Modify (if needed): whatever the checks below surface.
 
-- [ ] **Step 1: Full suite + typecheck + build**
+- [x] **Step 1: Full suite + typecheck + build**
 
 Run: `npm test && npx tsc --noEmit && npm run build`
 Expected: all green. (`npm run build` runs `prisma generate` first; sqlite provider is fine for a local build.)
 
-- [ ] **Step 2: Manual smoke (dev server)**
+- [x] **Step 2: Manual smoke (dev server)**
 
 Run `npm run dev`, then:
 1. Admin → users page → set a user's role to נסיין.
@@ -1411,6 +1411,6 @@ Run `npm run dev`, then:
 3. Admin → schedule page → panel shows the request → approve onto an empty press/shift → alone-warning confirm appears → confirm → cell shows tester name in experimenter slot → request badge flips to approved.
 4. Tester schedule view after publish shows the placement.
 
-- [ ] **Step 3: Deploy notes commit (if any fixes were made)**
+- [x] **Step 3: Deploy notes commit (if any fixes were made)**
 
 Remind user (do not run): run `neon-migrate-tester-role.sql` against Neon, flip provider to `postgresql`, deploy — per README deploy flow.
