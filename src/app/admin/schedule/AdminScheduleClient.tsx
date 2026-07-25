@@ -5,7 +5,7 @@ import NavBar from '@/components/NavBar';
 import WeekNav from '@/components/WeekNav';
 import Loading from '@/components/Loading';
 import ColorPopover from '@/components/ColorPopover';
-import ScheduleTable from '@/components/ScheduleTable';
+import ScheduleTable, { type TesterRequestView } from '@/components/ScheduleTable';
 import { getCurrentWeekStart, weekDates, dayName, formatDate } from '@/lib/dates';
 import { shiftLabel, constraintLabel, absenceLabel } from '@/lib/labels';
 import { useT, translateApiError, type DictKey } from '@/lib/i18n';
@@ -74,6 +74,7 @@ export default function AdminScheduleClient() {
   const [stationDrafts, setStationDrafts] = useState<Record<number, string>>({});
   const [stationsMessage, setStationsMessage] = useState('');
   const [testerRequests, setTesterRequests] = useState<TesterRequestRow[]>([]);
+  const [scheduleTesterRequests, setScheduleTesterRequests] = useState<TesterRequestView[]>([]);
   // Cells whose experimenter is edited as free text instead of the requester dropdown.
   const [manualCells, setManualCells] = useState<Record<CellKey, boolean>>({});
   const [colorPopoverKey, setColorPopoverKey] = useState<CellKey | null>(null);
@@ -110,6 +111,7 @@ export default function AdminScheduleClient() {
         const sched = await schedRes.json();
         const overview = await overviewRes.json();
         setTechnicians(sched.technicians);
+        setScheduleTesterRequests(sched.testerRequests ?? []);
         setConstraints(overview.constraints);
         setAbsences(overview.absences ?? {});
         setIncludeFriday(sched.schedule?.includeFriday ?? overview.includeFriday ?? false);
@@ -544,7 +546,13 @@ export default function AdminScheduleClient() {
                 {message}
               </p>
             )}
-            <ScheduleTable dates={dates} assignments={assignmentsPayload} technicians={technicians} stations={boardStations} />
+            <ScheduleTable
+              dates={dates}
+              assignments={assignmentsPayload}
+              technicians={technicians}
+              stations={boardStations}
+              testerRequests={scheduleTesterRequests}
+            />
           </div>
         ) : (
           <div className="animate-fade-up">
