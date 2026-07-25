@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/db';
-import { createSessionToken, sessionCookie } from '@/lib/auth';
+import { createSessionToken, sessionCookie, sessionRoleOf } from '@/lib/auth';
 import { ADMIN_EMAIL } from '@/lib/config';
 import { sendPushToAdmins } from '@/lib/push';
 
@@ -26,7 +26,13 @@ export async function POST(req: Request) {
   let tech;
   try {
     tech = await prisma.technician.create({
-      data: { name, email, passwordHash: await bcrypt.hash(password, 10), isAdmin: isBootstrapAdmin },
+      data: {
+        name,
+        email,
+        passwordHash: await bcrypt.hash(password, 10),
+        isAdmin: isBootstrapAdmin,
+        role: isBootstrapAdmin ? 'admin' : 'technician',
+      },
     });
   } catch (e) {
     if ((e as { code?: string }).code === 'P2002') {
@@ -34,7 +40,7 @@ export async function POST(req: Request) {
     }
     throw e;
   }
-  const role = tech.isAdmin ? 'admin' : 'technician';
+  const role = sessionRoleOf(tech);
   const token = await createSessionToken({ userId: tech.id, role, name: tech.name });
 
   // Notify admins that a new user has registered. Best-effort — registration
