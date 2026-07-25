@@ -74,7 +74,8 @@ export default function AdminScheduleClient() {
   const [stationDrafts, setStationDrafts] = useState<Record<number, string>>({});
   const [stationsMessage, setStationsMessage] = useState('');
   const [testerRequests, setTesterRequests] = useState<TesterRequestRow[]>([]);
-  const [requestStationPick, setRequestStationPick] = useState<Record<number, number | ''>>({});
+  // Cells whose experimenter is edited as free text instead of the requester dropdown.
+  const [manualCells, setManualCells] = useState<Record<CellKey, boolean>>({});
   const [colorPopoverKey, setColorPopoverKey] = useState<CellKey | null>(null);
   const [pendingColor, setPendingColor] = useState<string | null>(null);
   const [popoverAnchor, setPopoverAnchor] = useState<{ top: number; bottom: number; left: number; right: number } | null>(
@@ -130,10 +131,8 @@ export default function AdminScheduleClient() {
       if (requestsRes.ok) {
         const { requests } = await requestsRes.json();
         setTesterRequests(requests);
-        setRequestStationPick(
-          Object.fromEntries(requests.map((r: TesterRequestRow) => [r.id, r.stationId ?? '']))
-        );
       }
+      setManualCells({});
     } catch {
       setMessage(t('networkErrorRefresh'));
     } finally {
@@ -375,51 +374,24 @@ export default function AdminScheduleClient() {
     }
   }
 
-  async function approveRequest(r: TesterRequestRow) {
-    const pick = requestStationPick[r.id];
-    if (pick === '' || pick === undefined) return;
-    const k = key(r.date, r.shift, pick);
-    const cell = cells[k] ?? emptyCell;
-    if (cell.technicianId === '' && !confirm(t('testerAloneConfirm'))) return;
-    const experimenter = cell.experimenter.trim() ? `${cell.experimenter.trim()}, ${r.tester.name}` : r.tester.name;
-    const nextCells = { ...cells, [k]: { ...cell, experimenter } };
-    setCells(nextCells);
-    if (!(await saveDraft(undefined, nextCells))) return;
-    try {
-      const res = await fetch('/api/admin/tester-requests', {
-        method: 'PUT',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ id: r.id, action: 'approve', stationId: pick }),
-      });
-      if (res.ok) {
-        setMessage(t('requestApprovedMsg'));
-        setTesterRequests(reqs => reqs.map(x => (x.id === r.id ? { ...x, status: 'approved' } : x)));
-      } else {
-        const data = await res.json().catch(() => ({}));
-        setMessage(data.error ? translateApiError(lang, data.error) : t('genericError'));
-      }
-    } catch {
-      setMessage(t('networkError'));
-    }
+  // Testers with a non-rejected request on `date` — the cell dropdown's options.
+  function dayTesterRequests(date: string): TesterRequestRow[] {
+    return testerRequests.filter(r => r.date === date && r.status !== 'rejected');
   }
 
-  async function rejectRequest(r: TesterRequestRow) {
-    try {
-      const res = await fetch('/api/admin/tester-requests', {
-        method: 'PUT',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ id: r.id, action: 'reject' }),
-      });
-      if (res.ok) {
-        setMessage(t('requestRejectedMsg'));
-        setTesterRequests(reqs => reqs.map(x => (x.id === r.id ? { ...x, status: 'rejected' } : x)));
-      } else {
-        const data = await res.json().catch(() => ({}));
-        setMessage(data.error ? translateApiError(lang, data.error) : t('genericError'));
+  // Warning when a placed tester asked for the other shift that day.
+  function testerShiftWarning(date: string, shift: string, experimenter: string): string | null {
+    const names = experimenter
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+    for (const name of names) {
+      const r = testerRequests.find(x => x.date === date && x.tester.name === name && x.status !== 'rejected');
+      if (r && r.shift !== shift) {
+        return `${r.tester.name} — ${t('testerRequestedPrefix')} ${shiftLabel(lang, r.shift)}`;
       }
-    } catch {
-      setMessage(t('networkError'));
     }
+    return null;
   }
 
   async function addStation() {
@@ -615,66 +587,6 @@ export default function AdminScheduleClient() {
                 {message}
               </p>
             )}
-            {testerRequests.length > 0 && (
-              <div className="surface-card mb-4 p-4">
-                <h3 className="mb-2 font-bold text-slate-900">{t('testerRequestsHeading')}</h3>
-                <ul className="divide-y divide-slate-100">
-                  {testerRequests.map(r => (
-                    <li key={r.id} className="flex flex-wrap items-center gap-2 py-2 text-sm">
-                      <span className="font-medium text-slate-800">{r.tester.name}</span>
-                      <span className="text-slate-600">
-                        {dayName(r.date, lang)} {formatDate(r.date)} · {shiftLabel(lang, r.shift)}
-                      </span>
-                      <span className="text-slate-500">{r.station?.name ?? t('anyPressOption')}</span>
-                      {r.status === 'pending' ? (
-                        <span className="ms-auto flex items-center gap-2">
-                          <select
-                            value={requestStationPick[r.id] ?? ''}
-                            onChange={e =>
-                              setRequestStationPick(p => ({
-                                ...p,
-                                [r.id]: e.target.value === '' ? '' : Number(e.target.value),
-                              }))
-                            }
-                            className="field-sm text-xs"
-                          >
-                            <option value="">{t('stationLabel')}…</option>
-                            {boardStations.map(s => (
-                              <option key={s.id} value={s.id}>{s.name}</option>
-                            ))}
-                          </select>
-                          <button
-                            onClick={() => approveRequest(r)}
-                            disabled={requestStationPick[r.id] === '' || requestStationPick[r.id] === undefined}
-                            className="btn-success btn-sm"
-                          >
-                            {t('approveBtn')}
-                          </button>
-                          <button onClick={() => rejectRequest(r)} className="btn-secondary btn-sm">
-                            {t('rejectBtn')}
-                          </button>
-                        </span>
-                      ) : (
-                        <span
-                          className={`badge ms-auto ${
-                            r.status === 'approved' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-700'
-                          }`}
-                        >
-                          {r.status === 'approved' ? t('statusApprovedReq') : t('statusRejectedReq')}
-                        </span>
-                      )}
-                      <span className="basis-full text-slate-600">{r.description}</span>
-                      {(r.swVersion || r.hwNotes) && (
-                        <span className="basis-full text-xs text-slate-500">
-                          {r.swVersion && <span className="me-3">{t('swShortLabel')}: {r.swVersion}</span>}
-                          {r.hwNotes && <span>{t('hwShortLabel')}: {r.hwNotes}</span>}
-                        </span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
             {boardStations.length === 0 ? (
               <p className="py-16 text-center text-slate-500">{t('noActiveStationsBoardHint')}</p>
             ) : (
@@ -761,12 +673,59 @@ export default function AdminScheduleClient() {
                                       </option>
                                     ))}
                                 </select>
-                                <input
-                                  value={v.experimenter}
-                                  onChange={e => updateCell(k, { experimenter: e.target.value })}
-                                  placeholder={t('experimenterInputPlaceholder')}
-                                  className="field-sm mt-1 w-full px-1.5 py-1 text-xs"
-                                />
+                                {(() => {
+                                  const dayReqs = dayTesterRequests(date);
+                                  const matchesRequester = dayReqs.some(r => r.tester.name === v.experimenter);
+                                  const manual =
+                                    manualCells[k] || (v.experimenter.trim() !== '' && !matchesRequester);
+                                  if (dayReqs.length === 0 || manual) {
+                                    return (
+                                      <div className="mt-1 flex items-center gap-1">
+                                        <input
+                                          value={v.experimenter}
+                                          onChange={e => updateCell(k, { experimenter: e.target.value })}
+                                          placeholder={t('experimenterInputPlaceholder')}
+                                          className="field-sm w-full px-1.5 py-1 text-xs"
+                                        />
+                                        {dayReqs.length > 0 && (
+                                          <button
+                                            type="button"
+                                            aria-label={t('closeLabel')}
+                                            onClick={() => {
+                                              setManualCells(m => ({ ...m, [k]: false }));
+                                              updateCell(k, { experimenter: '' });
+                                            }}
+                                            className="text-xs text-slate-400 hover:text-slate-600"
+                                          >
+                                            ×
+                                          </button>
+                                        )}
+                                      </div>
+                                    );
+                                  }
+                                  return (
+                                    <select
+                                      value={v.experimenter}
+                                      onChange={e => {
+                                        if (e.target.value === '__manual__') {
+                                          setManualCells(m => ({ ...m, [k]: true }));
+                                        } else {
+                                          updateCell(k, { experimenter: e.target.value });
+                                        }
+                                      }}
+                                      aria-label={t('experimenterInputPlaceholder')}
+                                      className="field-sm mt-1 w-full px-1.5 py-1 text-xs"
+                                    >
+                                      <option value=""></option>
+                                      {dayReqs.map(r => (
+                                        <option key={r.id} value={r.tester.name}>
+                                          {r.tester.name} · {shiftLabel(lang, r.shift)}
+                                        </option>
+                                      ))}
+                                      <option value="__manual__">{t('manualEntryOption')}</option>
+                                    </select>
+                                  );
+                                })()}
                                 <input
                                   value={v.note}
                                   onChange={e => updateCell(k, { note: e.target.value })}
@@ -778,6 +737,14 @@ export default function AdminScheduleClient() {
                                     ⚠ {warning}
                                   </div>
                                 )}
+                                {(() => {
+                                  const tw = testerShiftWarning(date, shift, v.experimenter);
+                                  return tw ? (
+                                    <div className="mt-1 text-center text-[11px] leading-tight text-orange-600">
+                                      ⚠ {tw}
+                                    </div>
+                                  ) : null;
+                                })()}
                                 {colorPopoverKey === k && popoverAnchor && (
                                   <ColorPopover
                                     anchorRect={popoverAnchor}
